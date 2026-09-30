@@ -15,25 +15,29 @@ env/
 *.parquet
 *.csv
 
-*.pt
-*.pth
-*.ckpt
 *.onnx
 *.joblib
 *.pkl
 
-checkpoints/
-artifacts/
-state/
-logs/
+processed_data/
+kafka_2.13-4.3.1/
+*.tgz
 
 spark-warehouse/
 metastore_db/
 derby.log
 
+Model/
 real_time/
 external_validation/
 models/
+utils/
+.vscode/
+
+check_feature_leakage.py
+window.py
+
 lstm_clean/local_sequences/
 xgb_clean/xgb_data/
 lstm_clean/results/lstm_shap/*.npz
+*.crc
