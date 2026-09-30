@@ -1,0 +1,61 @@
+Ensemble tuning results
+
+Primary tuning metric: AUPRC
+Weight search step: 0.01
+Weight search population: ensemble_tuning only
+Calibration-evaluation was not used for weight selection.
+Calibration-evaluation was evaluated once using the selected weight.
+MIMIC test was not used.
+
+Selected XGB weight: 0.48
+Selected LSTM weight: 0.52
+
+Selected weight is an interior blend.
+
+Top-10 PR-AUC range: 0.0002584814
+Top weight configurations show measurable PR-AUC separation.
+
+Calibration-evaluation metrics:
+
+Calibrated XGBoost:
+ROC-AUC: 0.8558404968
+PR-AUC: 0.5487046126
+Brier: 0.0756981015
+Log-loss: 0.2593048655
+
+Calibrated LSTM:
+ROC-AUC: 0.8609276046
+PR-AUC: 0.5572138770
+Brier: 0.0750117356
+Log-loss: 0.2590103116
+
+Selected ensemble:
+ROC-AUC: 0.8684654372
+PR-AUC: 0.5766966734
+Brier: 0.0733257556
+Log-loss: 0.2509507855
+
+Best single model by calibration-evaluation PR-AUC: LSTM
+
+Ensemble minus best single model:
+AUROC absolute difference: 0.0075378327
+AUROC relative difference (%): 0.875548
+PR-AUC absolute difference: 0.0194827963
+PR-AUC relative difference (%): 3.496466
+Brier absolute difference: -0.0016859800
+Brier relative difference (%): -2.247622
+Log-loss absolute difference: -0.0080595261
+Log-loss relative difference (%): -3.111662
+
+Top 10 ensemble configurations on ensemble-tuning:
+ xgb_weight  lstm_weight  roc_auc   pr_auc    brier  log_loss  pr_auc_difference_from_best
+       0.48         0.52 0.880903 0.626966 0.069426  0.239742                     0.000000
+       0.47         0.53 0.880862 0.626962 0.069429  0.239778                     0.000004
+       0.49         0.51 0.880935 0.626929 0.069424  0.239711                     0.000037
+       0.46         0.54 0.880815 0.626916 0.069434  0.239819                     0.000049
+       0.45         0.55 0.880764 0.626899 0.069440  0.239866                     0.000067
+       0.50         0.50 0.880965 0.626889 0.069425  0.239686                     0.000077
+       0.44         0.56 0.880704 0.626854 0.069448  0.239917                     0.000111
+       0.51         0.49 0.880985 0.626817 0.069427  0.239665                     0.000149
+       0.43         0.57 0.880638 0.626772 0.069458  0.239973                     0.000194
+       0.52         0.48 0.880998 0.626707 0.069430  0.239649                     0.000258

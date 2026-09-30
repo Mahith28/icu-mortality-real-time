@@ -1,0 +1,2 @@
+XGB weight: 0.48
+LSTM weight: 0.52

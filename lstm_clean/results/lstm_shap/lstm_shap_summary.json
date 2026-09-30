@@ -1,0 +1,213 @@
+{
+  "model_path": "/home/mahith/BDA_PROJECT/Model/lstm_clean/results/lstm_adaptive_best.pt",
+  "test_path": "/home/mahith/BDA_PROJECT/Model/lstm_clean/rechunked_sequences/test_sequences",
+  "feature_metadata_source": "hdfs://localhost:9000/user/mahith/icu/clean_features/test_features",
+  "background_samples": 50,
+  "explained_samples": 200,
+  "shap_nsamples": 200,
+  "only_full_length_sequences": true,
+  "total_test_sequences": 1664239,
+  "full_length_test_sequences": 663372,
+  "full_length_coverage_percent": 39.86038063042628,
+  "population_characterization": [
+    {
+      "cohort": "overall_test",
+      "n": 1664239,
+      "mortality_rate": 0.18617338014551996
+    },
+    {
+      "cohort": "full_length_test",
+      "n": 663372,
+      "mortality_rate": 0.25032560916047103
+    }
+  ],
+  "temporal_shape": [
+    200,
+    120,
+    108
+  ],
+  "static_shape": [
+    200,
+    83
+  ],
+  "shap_output": "raw_logit",
+  "shap_efficiency_check": {
+    "baseline_mean_background_logit": -0.43329209089279175,
+    "mean_absolute_reconstruction_error": 0.6443605371759751,
+    "median_absolute_reconstruction_error": 0.44178734321225904,
+    "max_absolute_reconstruction_error": 5.285567366573092,
+    "explained_logit_std": 2.673917055130005,
+    "normalized_mean_error": 0.2409800019562112,
+    "nsamples": 200
+  },
+  "stability_analysis": {
+    "seeds": [
+      42,
+      123,
+      456,
+      789,
+      999
+    ],
+    "background_size": 20,
+    "explain_size": 50,
+    "pair_count": 10,
+    "mean_spearman_rank_correlation": 0.8539108801599375,
+    "median_spearman_rank_correlation": 0.8512781441100563,
+    "mean_top_10_jaccard": 0.47256909756909754,
+    "median_top_10_jaccard": 0.42857142857142855,
+    "seed_results": [
+      {
+        "seed": 42,
+        "background_size": 20,
+        "explain_size": 50,
+        "top_10_features": "anchor_age|race_ohe_WHITE|first_careunit_ohe_Neuro Intermediate|GCS_Verbal_mean|GCS_Verbal_last|admission_location_ohe_EMERGENCY ROOM|race_ohe_SOUTH AMERICAN|GCS_Verbal_min|GCS_Verbal_max|GCS_Eye_min"
+      },
+      {
+        "seed": 123,
+        "background_size": 20,
+        "explain_size": 50,
+        "top_10_features": "anchor_age|race_ohe_WHITE|admission_location_ohe_EMERGENCY ROOM|GCS_Verbal_mean|GCS_Eye_mean|GCS_Eye_max|GCS_Eye_min|GCS_Eye_last|GCS_Verbal_last|first_careunit_ohe_Neuro Intermediate"
+      },
+      {
+        "seed": 456,
+        "background_size": 20,
+        "explain_size": 50,
+        "top_10_features": "anchor_age|race_ohe_WHITE|admission_location_ohe_EMERGENCY ROOM|race_ohe_BLACK/AFRICAN AMERICAN|GCS_Motor_mean|GCS_Eye_max|GCS_Eye_mean|GCS_Motor_max|GCS_Eye_min|GCS_Motor_min"
+      },
+      {
+        "seed": 789,
+        "background_size": 20,
+        "explain_size": 50,
+        "top_10_features": "anchor_age|race_ohe_WHITE|admission_location_ohe_EMERGENCY ROOM|GCS_Verbal_mean|first_careunit_ohe_Neuro Intermediate|GCS_Verbal_last|GCS_Verbal_min|GCS_Verbal_max|admission_type_ohe_SURGICAL SAME DAY ADMISSION|race_ohe_BLACK/AFRICAN AMERICAN"
+      },
+      {
+        "seed": 999,
+        "background_size": 20,
+        "explain_size": 50,
+        "top_10_features": "anchor_age|race_ohe_WHITE|first_careunit_ohe_Neuro Intermediate|GCS_Verbal_mean|admission_location_ohe_EMERGENCY ROOM|GCS_Verbal_last|GCS_Verbal_min|GCS_Verbal_max|first_careunit_ohe_Cardiac Vascular Intensive Care Unit (CVICU)|race_ohe_BLACK/AFRICAN AMERICAN"
+      }
+    ]
+  },
+  "top_20_features": [
+    {
+      "feature": "anchor_age",
+      "type": "static",
+      "mean_shap": -0.007136352187245951,
+      "mean_abs_shap": 0.4843487463758101
+    },
+    {
+      "feature": "race_ohe_WHITE",
+      "type": "static",
+      "mean_shap": 0.06838634500594858,
+      "mean_abs_shap": 0.4201802154537046
+    },
+    {
+      "feature": "first_careunit_ohe_Neuro Intermediate",
+      "type": "static",
+      "mean_shap": 0.02869986604001489,
+      "mean_abs_shap": 0.27452927129365473
+    },
+    {
+      "feature": "admission_location_ohe_EMERGENCY ROOM",
+      "type": "static",
+      "mean_shap": 0.11726244130645266,
+      "mean_abs_shap": 0.2664776805081397
+    },
+    {
+      "feature": "GCS_Verbal_mean",
+      "type": "temporal",
+      "mean_shap": 0.018302841208635994,
+      "mean_abs_shap": 0.23782980937374096
+    },
+    {
+      "feature": "first_careunit_ohe_Neuro Stepdown",
+      "type": "static",
+      "mean_shap": 0.16685113867573612,
+      "mean_abs_shap": 0.22742769014481362
+    },
+    {
+      "feature": "GCS_Verbal_last",
+      "type": "temporal",
+      "mean_shap": 0.01256216695162667,
+      "mean_abs_shap": 0.21289435978318536
+    },
+    {
+      "feature": "GCS_Verbal_min",
+      "type": "temporal",
+      "mean_shap": 0.00736468891217957,
+      "mean_abs_shap": 0.20450003356295576
+    },
+    {
+      "feature": "race_ohe_BLACK/AFRICAN AMERICAN",
+      "type": "static",
+      "mean_shap": -0.010203114024783477,
+      "mean_abs_shap": 0.19442039690387983
+    },
+    {
+      "feature": "GCS_Verbal_max",
+      "type": "temporal",
+      "mean_shap": 0.011236130663873285,
+      "mean_abs_shap": 0.19232164339705599
+    },
+    {
+      "feature": "GCS_Eye_mean",
+      "type": "temporal",
+      "mean_shap": -0.011085460823466828,
+      "mean_abs_shap": 0.15037098425667783
+    },
+    {
+      "feature": "GCS_Eye_max",
+      "type": "temporal",
+      "mean_shap": -0.01358127273496345,
+      "mean_abs_shap": 0.15034087603126253
+    },
+    {
+      "feature": "GCS_Eye_min",
+      "type": "temporal",
+      "mean_shap": -0.011544831425698758,
+      "mean_abs_shap": 0.14669818477619867
+    },
+    {
+      "feature": "GCS_Motor_mean",
+      "type": "temporal",
+      "mean_shap": -0.01949108064042021,
+      "mean_abs_shap": 0.14479179828806998
+    },
+    {
+      "feature": "SpO2_missing",
+      "type": "temporal",
+      "mean_shap": 0.0031641104624727935,
+      "mean_abs_shap": 0.13995901503995842
+    },
+    {
+      "feature": "GCS_Eye_last",
+      "type": "temporal",
+      "mean_shap": -0.01381638587574186,
+      "mean_abs_shap": 0.13908807720412253
+    },
+    {
+      "feature": "GCS_Total_last",
+      "type": "temporal",
+      "mean_shap": -0.01665497494589808,
+      "mean_abs_shap": 0.13422355983745768
+    },
+    {
+      "feature": "Respiratory_Rate_missing",
+      "type": "temporal",
+      "mean_shap": 0.007082241696425435,
+      "mean_abs_shap": 0.132668682915229
+    },
+    {
+      "feature": "DBP_missing",
+      "type": "temporal",
+      "mean_shap": -0.004488049208554645,
+      "mean_abs_shap": 0.1321407784670843
+    },
+    {
+      "feature": "first_careunit_ohe_Cardiac Vascular Intensive Care Unit (CVICU)",
+      "type": "static",
+      "mean_shap": -0.05390974510953627,
+      "mean_abs_shap": 0.12812143842342757
+    }
+  ]
+}

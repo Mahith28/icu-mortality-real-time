@@ -1,0 +1,40 @@
+Ensemble bootstrap robustness analysis
+
+Evaluation population: calibration-evaluation
+Bootstrap unit: stay_id
+Number of bootstrap replicates: 2000
+Random seed: 42
+Confidence level: 0.95
+Ensemble weights were fixed before bootstrap analysis.
+MIMIC test data was not used.
+
+Observed metrics:
+
+Best single model by PR-AUC: LSTM
+Ensemble ROC-AUC: 0.868465
+Best single ROC-AUC: 0.860928
+Ensemble PR-AUC: 0.576697
+Best single PR-AUC: 0.557214
+ROC-AUC difference: 0.007538
+PR-AUC difference: 0.019483
+
+Individual model observed metrics:
+
+XGBoost ROC-AUC: 0.855840
+LSTM ROC-AUC: 0.860928
+XGBoost PR-AUC: 0.548705
+LSTM PR-AUC: 0.557214
+
+95% bootstrap confidence intervals:
+
+Ensemble ROC-AUC: 0.850845 to 0.885378
+Best single ROC-AUC: 0.842127 to 0.878621
+Ensemble PR-AUC: 0.530187 to 0.618466
+Best single PR-AUC: 0.513174 to 0.600530
+ROC-AUC difference: 0.002687 to 0.013557
+PR-AUC difference: 0.009218 to 0.024582
+
+Bootstrap probability of positive improvement:
+
+PR-AUC: 1.000000
+ROC-AUC: 0.999500

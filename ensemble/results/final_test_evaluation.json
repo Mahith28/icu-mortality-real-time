@@ -1,0 +1,66 @@
+{
+  "test_data_used_for_calibration": false,
+  "test_data_used_for_weight_selection": false,
+  "test_data_used_for_threshold_selection": false,
+  "xgb_weight": 0.48,
+  "lstm_weight": 0.52,
+  "locked_threshold": 0.108,
+  "target_sensitivity": 0.85,
+  "rows": 1664239,
+  "stays": 14489,
+  "positive_prevalence": 0.18617338014551996,
+  "roc_auc": 0.8163885001335176,
+  "pr_auc": 0.516762145821237,
+  "brier_score": 0.11884022876404915,
+  "log_loss": 0.37840911543968136,
+  "sensitivity": 0.8575283132743992,
+  "specificity": 0.5936723365736317,
+  "precision": 0.3255954168070831,
+  "ppv": 0.3255954168070831,
+  "npv": 0.9479577087857546,
+  "f1": 0.47198324483817733,
+  "f2": 0.6463401046914599,
+  "accuracy": 0.6427952956276112,
+  "alert_rate": 0.49032921353243136,
+  "tn": 804071,
+  "fp": 550331,
+  "fn": 44143,
+  "tp": 265694,
+  "bootstrap_replicates": 2000,
+  "bootstrap_unit": "stay_id",
+  "confidence_interval_method": "percentile",
+  "confidence_intervals": {
+    "roc_auc": [
+      0.8037944983694096,
+      0.8289462023961773
+    ],
+    "pr_auc": [
+      0.4837376462195764,
+      0.5501194901724453
+    ],
+    "brier": [
+      0.11286136427911682,
+      0.12530869583121937
+    ],
+    "sensitivity": [
+      0.8400456732371339,
+      0.8735661523502225
+    ],
+    "specificity": [
+      0.5812880631120761,
+      0.6064423348049554
+    ],
+    "precision": [
+      0.3049062543023136,
+      0.3466888550265089
+    ],
+    "npv": [
+      0.9408028865445077,
+      0.9546185891922534
+    ],
+    "alert_rate": [
+      0.47922688716141887,
+      0.5013838836104699
+    ]
+  }
+}

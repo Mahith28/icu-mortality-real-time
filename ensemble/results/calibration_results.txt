@@ -1,0 +1,55 @@
+Calibration phase results
+
+Split summary:
+                          rows  stays  positives  prevalence
+split                                                       
+calibration_evaluation   36992   2881       4414    0.119323
+calibration_fit         110922   8641      13389    0.120706
+ensemble_tuning          37012   2880       4442    0.120015
+
+Calibration-fit metrics are in-sample diagnostics and are not treated as held-out performance.
+
+Calibration-fit:
+xgb_raw:
+ROC-AUC: 0.8704402055
+PR-AUC: 0.5770361927
+Brier: 0.1272548221
+Log-loss: 0.4000850378
+xgb_calibrated:
+ROC-AUC: 0.8704402055
+PR-AUC: 0.5770361927
+Brier: 0.0737875578
+Log-loss: 0.2506774059
+lstm_raw:
+ROC-AUC: 0.8718320201
+PR-AUC: 0.5805870456
+Brier: 0.1165874942
+Log-loss: 0.3605374378
+lstm_calibrated:
+ROC-AUC: 0.8718320201
+PR-AUC: 0.5805870456
+Brier: 0.0736830010
+Log-loss: 0.2515329180
+
+Calibration-evaluation:
+xgb_raw:
+ROC-AUC: 0.8558404968
+PR-AUC: 0.5487046126
+Brier: 0.1294384459
+Log-loss: 0.4051725342
+xgb_calibrated:
+ROC-AUC: 0.8558404968
+PR-AUC: 0.5487046126
+Brier: 0.0756981015
+Log-loss: 0.2593048655
+lstm_raw:
+ROC-AUC: 0.8609276046
+PR-AUC: 0.5572138770
+Brier: 0.1180227464
+Log-loss: 0.3685045198
+lstm_calibrated:
+ROC-AUC: 0.8609276046
+PR-AUC: 0.5572138770
+Brier: 0.0750117356
+Log-loss: 0.2590103116
+

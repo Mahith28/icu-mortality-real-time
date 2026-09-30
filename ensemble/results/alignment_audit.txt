@@ -1,0 +1,29 @@
+Observed XGBoost rows: 1610439
+Observed LSTM rows: 184926
+Observed persisted aligned rows: 184926
+Observed XGBoost stays: 14402
+Observed LSTM stays: 14402
+Observed aligned stays: 14402
+Matched rows: 184926
+Full XGBoost ROC-AUC: 0.8256462826
+Full XGBoost PR-AUC: 0.5313112421
+Full positive prevalence: 0.1728329977
+Aligned XGBoost ROC-AUC: 0.8678462822
+Aligned XGBoost PR-AUC: 0.5758042224
+Aligned LSTM ROC-AUC: 0.8695373031
+Aligned LSTM PR-AUC: 0.5806744432
+Aligned positive prevalence: 0.1202913598
+XGBoost-LSTM probability correlation: 0.8351024232
+
+Prediction distribution:
+       xgb_probability  lstm_probability
+count    184926.000000      1.849260e+05
+mean          0.318844      2.542160e-01
+std           0.243130      2.995795e-01
+min           0.000975      6.910053e-08
+5%            0.023046      1.926837e-04
+25%           0.114461      5.409065e-03
+50%           0.263905      9.498878e-02
+75%           0.480518      4.801821e-01
+95%           0.797010      8.974364e-01
+max           0.997457      9.994580e-01

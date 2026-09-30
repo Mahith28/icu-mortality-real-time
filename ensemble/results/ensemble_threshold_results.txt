@@ -1,0 +1,51 @@
+Ensemble threshold selection
+Selection split: ensemble_tuning
+Calibration-evaluation used: False
+Test used: False
+Ensemble weights:
+XGBoost weight: 0.480000
+LSTM weight: 0.520000
+Primary threshold criterion:
+Fixed sensitivity target >= 0.85
+Among qualifying thresholds, maximize specificity.
+Additional threshold criteria evaluated:
+Youden's J
+Maximum F1
+Maximum F2
+Fixed sensitivity at 85%
+Tuning rows: 37012
+Tuning stays: 2880
+Positive prevalence: 0.120015
+Threshold comparison:
+           criterion  threshold  sensitivity  specificity  precision      npv       f1       f2  youden_j  accuracy  alert_rate      tn     fp     fn     tp
+            Youden_J      0.133     0.802116     0.779582   0.331689 0.966540 0.469310 0.624868  0.581699  0.782287    0.290230 25391.0 7179.0  879.0 3563.0
+              Max_F1      0.306     0.531968     0.955204   0.618263 0.937361 0.571878 0.547244  0.487172  0.904409    0.103264 31111.0 1459.0 2079.0 2363.0
+              Max_F2      0.133     0.802116     0.779582   0.331689 0.966540 0.469310 0.624868  0.581699  0.782287    0.290230 25391.0 7179.0  879.0 3563.0
+Fixed_Sensitivity_85      0.108     0.850293     0.720817   0.293473 0.972455 0.436345 0.616391  0.571109  0.736356    0.347725 23477.0 9093.0  665.0 3777.0
+Primary locked threshold: 0.108000
+Locked-threshold metrics:
+Sensitivity: 0.850293
+Specificity: 0.720817
+Precision / PPV: 0.293473
+NPV: 0.972455
+F1: 0.436345
+F2: 0.616391
+Youden's J: 0.571109
+Accuracy: 0.736356
+Alert rate: 0.347725
+Probability metrics:
+ROC-AUC: 0.880903
+PR-AUC: 0.626966
+Brier score: 0.069426
+Log-loss: 0.239742
+Locked-threshold confusion matrix:
+TN: 23477
+FP: 9093
+FN: 665
+TP: 3777
+Threshold candidates: 981
+Thresholds meeting sensitivity target: 99
+Locked threshold saved: /home/mahith/BDA_PROJECT/Model/ensemble/results/locked_ensemble_threshold.json
+Threshold search saved: /home/mahith/BDA_PROJECT/Model/ensemble/results/ensemble_threshold_search.csv
+Criteria comparison saved: /home/mahith/BDA_PROJECT/Model/ensemble/results/threshold_criteria_comparison.csv
+Threshold-selection predictions saved: /home/mahith/BDA_PROJECT/Model/ensemble/results/threshold_selection_predictions.parquet

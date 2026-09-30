@@ -1,0 +1,35 @@
+Final MIMIC-IV test evaluation
+XGBoost weight: 0.480000
+LSTM weight: 0.520000
+Locked threshold: 0.108000
+Target sensitivity: 0.850000
+Test rows: 1664239
+Test stays: 14489
+Positive prevalence: 0.186173
+ROC-AUC: 0.816389
+PR-AUC: 0.516762
+Brier score: 0.118840
+Log-loss: 0.378409
+Sensitivity: 0.857528
+Specificity: 0.593672
+Precision / PPV: 0.325595
+NPV: 0.947958
+F1: 0.471983
+F2: 0.646340
+Accuracy: 0.642795
+Alert rate: 0.490329
+TN: 804071
+FP: 550331
+FN: 44143
+TP: 265694
+Bootstrap replicates: 2000
+Bootstrap unit: stay_id
+95% confidence intervals:
+roc_auc: 0.803794 to 0.828946
+pr_auc: 0.483738 to 0.550119
+brier: 0.112861 to 0.125309
+sensitivity: 0.840046 to 0.873566
+specificity: 0.581288 to 0.606442
+precision: 0.304906 to 0.346689
+npv: 0.940803 to 0.954619
+alert_rate: 0.479227 to 0.501384

@@ -1,0 +1,26 @@
+Operating-point trade-off analysis
+Threshold search rows: 981
+Locked threshold: 0.108000
+Locked sensitivity: 0.850293
+Locked specificity: 0.720817
+Locked alert rate: 0.347725
+
+The locked threshold was not changed by this analysis.
+This phase is descriptive and is not used for threshold selection.
+No test data were used.
+Selected operating points
+Threshold=0.050, Sensitivity=0.936065, Specificity=0.547129, PPV=0.219907, NPV=0.984313, F1=0.356146, F2=0.566856, Accuracy=0.593807, Alert rate=0.510861
+Threshold=0.075, Sensitivity=0.904998, Specificity=0.632607, PPV=0.251470, NPV=0.979930, F1=0.393577, F2=0.595485, Accuracy=0.665298, Alert rate=0.431914
+Threshold=0.100, Sensitivity=0.866502, Specificity=0.699939, PPV=0.282558, NPV=0.974647, F1=0.426151, F2=0.613093, Accuracy=0.719929, Alert rate=0.368043
+Threshold=0.108 [LOCKED], Sensitivity=0.850293, Specificity=0.720817, PPV=0.293473, NPV=0.972455, F1=0.436345, F2=0.616391, Accuracy=0.736356, Alert rate=0.347725
+Threshold=0.125, Sensitivity=0.816524, Specificity=0.761897, PPV=0.318661, NPV=0.968201, F1=0.458418, F2=0.622127, Accuracy=0.768453, Alert rate=0.307522
+Threshold=0.150, Sensitivity=0.764971, Specificity=0.812926, PPV=0.358023, NPV=0.962065, F1=0.487763, F2=0.623280, Accuracy=0.807171, Alert rate=0.256430
+Threshold=0.200, Sensitivity=0.679874, Specificity=0.882868, PPV=0.441843, NPV=0.952878, F1=0.535603, F2=0.613746, Accuracy=0.858505, Alert rate=0.184670
+Threshold=0.250, Sensitivity=0.606484, Specificity=0.926620, PPV=0.529898, NPV=0.945252, F1=0.565610, F2=0.589445, Accuracy=0.888198, Alert rate=0.137361
+Threshold=0.300, Sensitivity=0.538496, Specificity=0.952963, PPV=0.609582, NPV=0.938044, F1=0.571838, F2=0.551355, Accuracy=0.903221, Alert rate=0.106020
+Threshold=0.400, Sensitivity=0.428186, Specificity=0.977403, PPV=0.721001, NPV=0.926107, F1=0.537288, F2=0.466039, Accuracy=0.911488, Alert rate=0.071274
+Threshold=0.500, Sensitivity=0.339036, Specificity=0.988179, PPV=0.796404, NPV=0.916403, F1=0.475604, F2=0.383031, Accuracy=0.910272, Alert rate=0.051092
+Threshold=0.600, Sensitivity=0.260693, Specificity=0.995302, PPV=0.883295, NPV=0.908014, F1=0.402573, F2=0.303475, Accuracy=0.907138, Alert rate=0.035421
+Threshold=0.700, Sensitivity=0.175822, Specificity=0.998496, PPV=0.940964, NPV=0.898817, F1=0.296282, F2=0.209969, Accuracy=0.899762, Alert rate=0.022425
+Threshold=0.800, Sensitivity=0.088474, Specificity=0.999846, PPV=0.987437, NPV=0.889414, F1=0.162397, F2=0.108169, Accuracy=0.890468, Alert rate=0.010753
+Threshold=0.900, Sensitivity=0.030167, Specificity=1.000000, PPV=1.000000, NPV=0.883182, F1=0.058566, F2=0.037426, Accuracy=0.883605, Alert rate=0.003620

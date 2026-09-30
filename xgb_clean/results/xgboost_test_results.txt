@@ -1,0 +1,27 @@
+ICU MORTALITY - XGBOOST FINAL TEST EVALUATION
+Model variant : 137-feature clean model
+
+Test rows : 1,664,239
+Model total built rounds : 274
+Model best iteration : 243
+Prediction iteration_range : (0, 244)
+Locked threshold : 0.440000
+
+FINAL TEST METRICS
+ROC-AUC : 0.804429
+PR-AUC : 0.499929
+Accuracy : 0.698377
+Precision : 0.356686
+Recall : 0.771690
+Specificity : 0.681606
+F1-score : 0.487871
+
+CONFUSION MATRIX
+[[923168 431234]
+ [ 70739 239098]]
+
+CONFUSION MATRIX VALUES
+True Negatives : 923,168
+False Positives : 431,234
+False Negatives : 70,739
+True Positives : 239,098

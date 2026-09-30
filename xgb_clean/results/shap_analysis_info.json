@@ -1,0 +1,25 @@
+{
+  "model_path": "/home/mahith/BDA_PROJECT/Model/models/icu_mortality_xgboost_clean.json",
+  "test_path": "/home/mahith/BDA_PROJECT/Model/xgb_clean/test_data/test_features",
+  "xgboost_version": "3.3.0",
+  "shap_version": "0.52.0",
+  "model_boosting_rounds": 274,
+  "best_iteration": 243,
+  "trees_used": 244,
+  "feature_count": 137,
+  "test_rows": 1664239,
+  "batch_size": 10000,
+  "model_output": "raw",
+  "expected_value": 0.0,
+  "additivity_check": "passed",
+  "additivity": {
+    "mean_difference": 0.0007293371018022299,
+    "median_difference": 0.0007292628288269043,
+    "max_difference": 0.0007338523864746094,
+    "min_difference": 0.0007271766662597656,
+    "std_difference": 5.887922611691465e-07,
+    "tolerance": 0.001,
+    "rows_checked": 10000
+  },
+  "shap_runtime_minutes": 2.1025760968526206
+}

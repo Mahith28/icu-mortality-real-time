@@ -1,0 +1,8 @@
+{
+  "method": "Platt scaling using logistic regression on logit-transformed probabilities",
+  "random_seed": 42,
+  "xgb_intercept": -1.6827572668493167,
+  "xgb_coefficient": 1.2964222172584006,
+  "lstm_intercept": -1.4879018224914522,
+  "lstm_coefficient": 0.6916860069585927
+}

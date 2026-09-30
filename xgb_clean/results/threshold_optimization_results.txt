@@ -1,0 +1,33 @@
+XGBOOST CLEAN MODEL - THRESHOLD OPTIMIZATION
+Validation rows: 1610439
+Model features: 137
+Best iteration: 243
+ROC-AUC: 0.825646
+PR-AUC: 0.531311
+
+BEST F1 THRESHOLD
+Threshold: 0.62
+Precision: 0.456107
+Recall: 0.599191
+Specificity: 0.850705
+F1: 0.517949
+F2: 0.563816
+
+BEST F2 THRESHOLD
+Threshold: 0.40
+Precision: 0.324977
+Recall: 0.838997
+Specificity: 0.635866
+F1: 0.468489
+F2: 0.637370
+
+RECALL-CONSTRAINED THRESHOLDS
+Recall >= 70%: Threshold=0.54, Precision=0.400304, Recall=0.701305, Specificity=0.780476
+Recall >= 75%: Threshold=0.49, Precision=0.370885, Recall=0.754779, Specificity=0.732487
+Recall >= 80%: Threshold=0.44, Precision=0.344580, Recall=0.803892, Specificity=0.680508
+Recall >= 85%: Threshold=0.38, Precision=0.315571, Recall=0.854762, Specificity=0.612644
+Recall >= 90%: Threshold=0.31, Precision=0.285481, Recall=0.901443, Specificity=0.528580
+
+RECOMMENDED VALIDATION THRESHOLD
+Threshold: 0.44
+Method: best_precision_with_recall_at_least_80_percent

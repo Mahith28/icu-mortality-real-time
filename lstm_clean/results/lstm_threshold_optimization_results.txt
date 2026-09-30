@@ -1,0 +1,55 @@
+LSTM THRESHOLD OPTIMIZATION
+Validation rows: 184926
+ROC-AUC: 0.869538
+PR-AUC: 0.580679
+
+BEST F1 THRESHOLD
+threshold: 0.66
+precision: 0.5223980574395043
+recall: 0.5609350415823781
+specificity: 0.9298750315033716
+f1: 0.540981118987232
+f2: 0.5527794021228714
+accuracy: 0.8854947384359149
+tn: 151273.0
+fp: 11408.0
+fn: 9767.0
+tp: 12478.0
+
+BEST F2 THRESHOLD
+threshold: 0.43
+precision: 0.32653291465317863
+recall: 0.7806698134412228
+specificity: 0.7798329245578771
+f1: 0.4604656095879514
+f2: 0.6107777691804478
+accuracy: 0.7799335950596454
+tn: 126864.0
+fp: 35817.0
+fn: 4879.0
+tp: 17366.0
+
+BEST YOUDEN'S J THRESHOLD (reference only, not the recommendation)
+threshold: 0.43
+precision: 0.32653291465317863
+recall: 0.7806698134412228
+specificity: 0.7798329245578771
+f1: 0.4604656095879514
+f2: 0.6107777691804478
+youden_j: 0.5605027379990999
+accuracy: 0.7799335950596454
+tn: 126864.0
+fp: 35817.0
+fn: 4879.0
+tp: 17366.0
+
+RECALL-CONSTRAINED THRESHOLDS
+Recall >= 70%: Threshold=0.51, Precision=0.384267, Recall=0.705327, Specificity=0.845458
+Recall >= 75%: Threshold=0.47, Precision=0.348102, Recall=0.750865, Specificity=0.807722
+Recall >= 80%: Threshold=0.39, Precision=0.310516, Recall=0.802832, Specificity=0.756241
+Recall >= 85%: Threshold=0.27, Precision=0.273196, Recall=0.851877, Specificity=0.690105
+Recall >= 90%: Threshold=0.15, Precision=0.241146, Recall=0.902315, Specificity=0.611731
+
+RECOMMENDED VALIDATION THRESHOLD
+Threshold: 0.39
+Method: best_precision_with_recall_at_least_80_percent
