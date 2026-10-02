@@ -41,3 +41,62 @@ lstm_clean/local_sequences/
 xgb_clean/xgb_data/
 lstm_clean/results/lstm_shap/*.npz
 *.crc
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# Data
+*.csv
+*.parquet
+*.wav
+*.mp3
+*.zip
+*.tar
+*.gz
+
+# ML models
+*.h5
+*.keras
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Generated files
+results/
+outputs/
+logs/
+tmp/
+temp/
+
+# Spark
+spark-warehouse/
+metastore_db/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

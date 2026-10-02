@@ -1,0 +1,7 @@
+{
+  "threshold": 0.108,
+  "target_sensitivity": 0.85,
+  "xgb_weight": 0.48,
+  "lstm_weight": 0.52,
+  "test_used": false
+}

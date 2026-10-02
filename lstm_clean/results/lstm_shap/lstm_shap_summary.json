@@ -1,6 +1,6 @@
 {
-  "model_path": "/home/mahith/BDA_PROJECT/Model/lstm_clean/results/lstm_adaptive_best.pt",
-  "test_path": "/home/mahith/BDA_PROJECT/Model/lstm_clean/rechunked_sequences/test_sequences",
+  "model_path": "/home/mahith/BDA_PROJECT/lstm_clean/checkpoints/lstm_adaptive_best.pt",
+  "test_path": "/home/mahith/BDA_PROJECT/lstm_clean/rechunked_sequences/test_sequences",
   "feature_metadata_source": "hdfs://localhost:9000/user/mahith/icu/clean_features/test_features",
   "background_samples": 50,
   "explained_samples": 200,

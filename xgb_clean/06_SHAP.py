@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 import xgboost as xgb
 import shap
 from pyspark.sql import SparkSession
-MODEL_PATH="/home/mahith/BDA_PROJECT/Model/models/icu_mortality_xgboost_clean.json"
-TEST_PATH="/home/mahith/BDA_PROJECT/Model/xgb_clean/test_data/test_features"
+MODEL_PATH="/home/mahith/BDA_PROJECT/xgb_clean/checkpoints/icu_mortality_xgboost_clean.json"
+TEST_PATH="/home/mahith/BDA_PROJECT/xgb_clean/test_data/test_features"
 HDFS_TEST="hdfs://localhost:9000/user/mahith/icu/clean_features/test_features"
-OUTPUT_DIR="/home/mahith/BDA_PROJECT/Model/xgb_clean/results"
+OUTPUT_DIR="/home/mahith/BDA_PROJECT/xgb_clean/results"
 EXPECTED_FEATURES=137
 EXPECTED_BEST_ITERATION=243
 EXPECTED_TEST_ROWS=1664239

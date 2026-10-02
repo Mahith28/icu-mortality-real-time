@@ -1,6 +1,6 @@
 {
-  "model_path": "/home/mahith/BDA_PROJECT/Model/models/icu_mortality_xgboost_clean.json",
-  "test_path": "/home/mahith/BDA_PROJECT/Model/xgb_clean/test_data/test_features",
+  "model_path": "/home/mahith/BDA_PROJECT/xgb_clean/checkpoints/icu_mortality_xgboost_clean.json",
+  "test_path": "/home/mahith/BDA_PROJECT/xgb_clean/test_data/test_features",
   "xgboost_version": "3.3.0",
   "shap_version": "0.52.0",
   "model_boosting_rounds": 274,
@@ -21,5 +21,5 @@
     "tolerance": 0.001,
     "rows_checked": 10000
   },
-  "shap_runtime_minutes": 2.1025760968526206
+  "shap_runtime_minutes": 3.1497363885243734
 }
