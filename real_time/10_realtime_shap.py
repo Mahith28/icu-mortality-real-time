@@ -35,7 +35,12 @@ class RealtimeSHAP:
         self.shap_model = self.model if self.tree_limit == rounds else self.model[:self.tree_limit]
         if int(self.shap_model.num_boosted_rounds()) != self.tree_limit:
             raise RuntimeError("Limited XGBoost model has unexpected round count")
+
         self.explainer = shap.TreeExplainer(self.shap_model, feature_perturbation="tree_path_dependent", model_output="raw")
+        self.explainer.shap_values(
+            np.zeros((1, self.expected_features), dtype=np.float32),
+            check_additivity=False,
+        )
         self.expected_value = self._get_expected_value()
         if not math.isfinite(self.expected_value):
             raise ValueError(f"SHAP expected value is not finite: {self.expected_value}")
@@ -142,11 +147,11 @@ class RealtimeSHAP:
     def _top_features(self, values, shap_values):
         order = np.argsort(-np.abs(shap_values), kind="stable")[:self.top_k]
         return [{"feature": self.feature_names[int(i)], "value": None if np.isnan(values[int(i)]) else float(values[int(i)]), "shap_value": float(shap_values[int(i)]), "abs_shap_value": float(abs(shap_values[int(i)]))} for i in order]
-    def _changed_features(self, previous_values, previous_shap, current_values, current_shap):
+    def _changed_features(self, previous_values, previous_shap, current_values, current_shap, min_abs_shap_delta=1e-4):
         if previous_values is None or previous_shap is None:
             return []
         shap_delta = current_shap - previous_shap
-        order = np.argsort(-np.abs(shap_delta), kind="stable")[:self.top_k]
+        order = np.argsort(-np.abs(shap_delta), kind="stable")
         output = []
         for i in order:
             i = int(i)
@@ -154,8 +159,85 @@ class RealtimeSHAP:
             cv = current_values[i]
             pv_nan = np.isnan(pv)
             cv_nan = np.isnan(cv)
-            output.append({"feature": self.feature_names[i], "previous_value": None if pv_nan else float(pv), "current_value": None if cv_nan else float(cv), "previous_shap_value": float(previous_shap[i]), "current_shap_value": float(current_shap[i]), "value_delta": None if pv_nan or cv_nan else float(cv - pv), "shap_delta": float(shap_delta[i]), "value_changed": bool(pv_nan != cv_nan or (not pv_nan and not cv_nan and abs(float(cv - pv)) > 1e-6))})
+            value_changed = bool(pv_nan != cv_nan or (not pv_nan and not cv_nan and abs(float(cv - pv)) > 1e-6))
+            row = {"feature": self.feature_names[i], "previous_value": None if pv_nan else float(pv), "current_value": None if cv_nan else float(cv), "previous_shap_value": float(previous_shap[i]), "current_shap_value": float(current_shap[i]), "value_delta": None if pv_nan or cv_nan else float(cv - pv), "shap_delta": float(shap_delta[i]), "value_changed": value_changed}
+            if value_changed or abs(float(shap_delta[i])) >= min_abs_shap_delta:
+                output.append(row)
+            if len(output) >= self.top_k:
+                break
         return output
+    @staticmethod
+    def _changed_vitals(previous_observations, current_observations):
+        if not previous_observations or not current_observations:
+            return []
+        output = []
+        for name, current_value in current_observations.items():
+            previous_value = previous_observations.get(name)
+            if previous_value is None or current_value is None:
+                if previous_value != current_value:
+                    output.append({"vital": str(name), "previous_value": previous_value, "current_value": current_value, "delta": None})
+            elif abs(float(current_value) - float(previous_value)) > 1e-9:
+                output.append({"vital": str(name), "previous_value": previous_value, "current_value": current_value, "delta": float(current_value) - float(previous_value)})
+        return output
+    def compare_live(self, previous, current):
+        if not isinstance(current, dict):
+            raise TypeError("current must be a dictionary")
+        if "window_id" not in current:
+            raise KeyError("current is missing window_id")
+        if "features" not in current:
+            raise KeyError("current is missing features")
+        if "shap_values" not in current:
+            raise KeyError("current is missing shap_values")
+        if "ensemble_probability" not in current:
+            raise KeyError("current is missing ensemble_probability")
+        current_window_id = self._normalize_window_id(current["window_id"])
+        current_values = self._validate_features(current["features"])
+        current_shap = np.asarray(current["shap_values"], dtype=np.float64).reshape(-1)
+        if current_shap.shape != (self.expected_features,) or not np.all(np.isfinite(current_shap)):
+            raise RuntimeError("Invalid current SHAP values")
+        current_xgb = current.get("xgb_probability")
+        current_lstm = current.get("lstm_probability")
+        current_ensemble = self._validate_probability(current["ensemble_probability"], "current.ensemble_probability")
+        if current_xgb is not None:
+            current_xgb = self._validate_probability(current_xgb, "current.xgb_probability")
+        if current_lstm is not None:
+            current_lstm = self._validate_probability(current_lstm, "current.lstm_probability")
+        previous_values = None
+        previous_shap = None
+        previous_xgb = None
+        previous_lstm = None
+        previous_ensemble = None
+        previous_window_id = None
+        if previous is not None:
+            if not isinstance(previous, dict):
+                raise TypeError("previous must be a dictionary or None")
+            if "window_id" not in previous:
+                raise KeyError("previous is missing window_id")
+            if "features" not in previous:
+                raise KeyError("previous is missing features")
+            if "shap_values" not in previous:
+                raise KeyError("previous is missing shap_values")
+            previous_window_id = self._normalize_window_id(previous["window_id"])
+            if previous_window_id != current_window_id:
+                raise ValueError("compare_live requires previous and current from the same window")
+            previous_values = self._validate_features(previous["features"])
+            previous_shap = np.asarray(previous["shap_values"], dtype=np.float64).reshape(-1)
+            if previous_shap.shape != (self.expected_features,) or not np.all(np.isfinite(previous_shap)):
+                raise RuntimeError("Invalid previous SHAP values")
+            previous_xgb = previous.get("xgb_probability")
+            previous_lstm = previous.get("lstm_probability")
+            previous_ensemble = previous.get("ensemble_probability")
+            if previous_xgb is not None:
+                previous_xgb = self._validate_probability(previous_xgb, "previous.xgb_probability")
+            if previous_lstm is not None:
+                previous_lstm = self._validate_probability(previous_lstm, "previous.lstm_probability")
+            if previous_ensemble is not None:
+                previous_ensemble = self._validate_probability(previous_ensemble, "previous.ensemble_probability")
+        ensemble_delta = None if previous_ensemble is None else float(current_ensemble - previous_ensemble)
+        xgb_delta = None if current_xgb is None or previous_xgb is None else float(current_xgb - previous_xgb)
+        lstm_delta = None if current_lstm is None or previous_lstm is None else float(current_lstm - previous_lstm)
+        result = {"previous_window_id": previous_window_id, "window_id": current_window_id, "charttime": current.get("charttime"), "previous_charttime": None if previous is None else previous.get("charttime"), "ensemble_probability": current_ensemble, "ensemble_probability_previous": previous_ensemble, "ensemble_probability_delta": ensemble_delta, "xgb_probability": current_xgb, "xgb_probability_previous": previous_xgb, "xgb_probability_delta": xgb_delta, "lstm_probability": current_lstm, "lstm_probability_previous": previous_lstm, "lstm_probability_delta": lstm_delta, "changed_vitals": self._changed_vitals(None if previous is None else previous.get("observations"), current.get("observations")), "changed_features": self._changed_features(previous_values, previous_shap, current_values, current_shap), "shap_values": current_shap.astype(float).tolist(), "top_features": self._top_features(current_values, current_shap)}
+        return self.validate_json_safe(result)
     def explain_live(self, features, xgb_raw_probability=None, xgb_raw_margin=None, verify=True):
         values, shap_values, model_margin, margin_error = self.explain(features, xgb_raw_probability, xgb_raw_margin, verify)
         return {"component": "xgboost", "output": "raw_log_odds", "expected_value": self.expected_value, "model_margin": model_margin, "additivity_error": margin_error, "tree_limit": self.tree_limit, "tree_count": int(self.model.num_boosted_rounds()), "top_features": self._top_features(values, shap_values), "shap_values": shap_values.astype(float).tolist()}

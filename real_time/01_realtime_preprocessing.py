@@ -145,6 +145,175 @@ class RealtimePreprocessor:
         for name in TEMPORAL_FEATURE_NAMES:
             if not np.isfinite(float(self.imputation[name])):
                 raise RuntimeError(f"Invalid imputation value for {name}")
+    @staticmethod
+    def _encode_state_value(value):
+        """Convert a runtime value into strict-JSON-safe state data."""
+        if isinstance(value, pd.Timestamp):
+            if pd.isna(value):
+                raise ValueError("NaT is not valid in preprocessing runtime state")
+            return {"__realtime_state_type__": "timestamp", "value": value.isoformat()}
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float) and not np.isfinite(value):
+            if np.isnan(value):
+                token = "nan"
+            elif value > 0:
+                token = "+inf"
+            else:
+                token = "-inf"
+            return {"__realtime_state_type__": "float", "value": token}
+        if value is None or isinstance(value, (str, bool, int, float)):
+            return value
+        raise ValueError(f"Unsupported preprocessing state value: {type(value).__name__}")
+
+    @staticmethod
+    def _decode_state_value(value):
+        """Restore values encoded by _encode_state_value."""
+        if isinstance(value, dict) and "__realtime_state_type__" in value:
+            kind = value.get("__realtime_state_type__")
+            if kind == "timestamp" and isinstance(value.get("value"), str):
+                return pd.Timestamp(value["value"])
+            if kind == "float" and value.get("value") in ("nan", "+inf", "-inf"):
+                return {"nan": float("nan"), "+inf": float("inf"), "-inf": float("-inf")}[value["value"]]
+            raise ValueError("Invalid encoded preprocessing state value")
+        if isinstance(value, (str, bool, int, float)) or value is None:
+            return value
+        raise ValueError("Invalid preprocessing state value type")
+
+    def to_state_dict(self):
+        """Return JSON-safe preprocessor runtime state without mutating it."""
+        active_windows = []
+        for stay_id, windows in self.active_windows.items():
+            if isinstance(stay_id, bool) or not isinstance(stay_id, (int, np.integer)):
+                raise ValueError(f"Invalid stay ID in active_windows: {stay_id!r}")
+            if not isinstance(windows, dict):
+                raise ValueError(f"Invalid active-window map for stay {stay_id}")
+            for window_id, observations in windows.items():
+                if isinstance(window_id, bool) or not isinstance(window_id, (int, np.integer)):
+                    raise ValueError(f"Invalid window ID: {window_id!r}")
+                if int(window_id) < 0:
+                    raise ValueError("Active-window ID must be non-negative")
+                if not isinstance(observations, list) or not observations:
+                    raise ValueError("Active-window observations must be non-empty lists")
+                encoded_observations = []
+                for observation in observations:
+                    if not isinstance(observation, dict):
+                        raise ValueError("Each active observation must be a dictionary")
+                    required = {"stay_id", "charttime", "vital_sign", "value"}
+                    if not required.issubset(observation):
+                        raise ValueError("Active observation is missing required fields")
+                    encoded_observations.append({
+                        "stay_id": int(observation["stay_id"]),
+                        "charttime": self._encode_state_value(pd.Timestamp(observation["charttime"])),
+                        "vital_sign": self._encode_state_value(observation["vital_sign"]),
+                        "value": self._encode_state_value(observation["value"]),
+                    })
+                active_windows.append({
+                    "stay_id": int(stay_id),
+                    "window_id": int(window_id),
+                    "observations": encoded_observations,
+                })
+
+        locf_state = []
+        for stay_id, values in self.locf_state.items():
+            if isinstance(stay_id, bool) or not isinstance(stay_id, (int, np.integer)):
+                raise ValueError(f"Invalid stay ID in locf_state: {stay_id!r}")
+            if not isinstance(values, dict):
+                raise ValueError(f"Invalid LOCF state for stay {stay_id}")
+            locf_state.append({
+                "stay_id": int(stay_id),
+                "values": {str(name): self._encode_state_value(value) for name, value in values.items()},
+            })
+
+        payload = {
+            "schema_version": 1,
+            "active_windows": active_windows,
+            "locf_state": locf_state,
+        }
+        # Enforce the same strict JSON rule used by the SQLite store.
+        json.dumps(payload, allow_nan=False, separators=(",", ":"), sort_keys=True)
+        return payload
+
+    def restore_state_dict(self, payload):
+        """Validate and restore serialized runtime state atomically."""
+        if not isinstance(payload, dict):
+            raise ValueError("Preprocessor state must be a dictionary")
+        if payload.get("schema_version") != 1:
+            raise ValueError("Unsupported preprocessor state schema version")
+        if set(payload) != {"schema_version", "active_windows", "locf_state"}:
+            raise ValueError("Preprocessor state has missing or unexpected fields")
+        if not isinstance(payload["active_windows"], list) or not isinstance(payload["locf_state"], list):
+            raise ValueError("Preprocessor state collections must be lists")
+
+        # Build and validate temporary structures first so failures cannot leave
+        # the current live state partially replaced.
+        restored_windows = {}
+        for entry in payload["active_windows"]:
+            if not isinstance(entry, dict) or set(entry) != {"stay_id", "window_id", "observations"}:
+                raise ValueError("Invalid active-window state entry")
+            stay_id, window_id, observations = entry["stay_id"], entry["window_id"], entry["observations"]
+            if (isinstance(stay_id, bool) or not isinstance(stay_id, int)
+                    or isinstance(window_id, bool) or not isinstance(window_id, int)
+                    or window_id < 0 or not isinstance(observations, list) or not observations):
+                raise ValueError("Invalid active-window identifiers or observations")
+            if stay_id not in restored_windows:
+                restored_windows[stay_id] = {}
+            if window_id in restored_windows[stay_id]:
+                raise ValueError("Duplicate stay/window entry in preprocessor state")
+            restored_observations = []
+            for observation in observations:
+                if not isinstance(observation, dict) or set(observation) != {"stay_id", "charttime", "vital_sign", "value"}:
+                    raise ValueError("Invalid observation entry in preprocessor state")
+                decoded_stay = observation["stay_id"]
+                if isinstance(decoded_stay, bool) or not isinstance(decoded_stay, int) or decoded_stay != stay_id:
+                    raise ValueError("Observation stay ID does not match its window")
+                charttime = self._decode_state_value(observation["charttime"])
+                vital_sign = self._decode_state_value(observation["vital_sign"])
+                value = self._decode_state_value(observation["value"])
+                if (not isinstance(charttime, pd.Timestamp) or pd.isna(charttime)
+                        or not isinstance(vital_sign, str) or not vital_sign):
+                    raise ValueError("Invalid observation timestamp or vital-sign name")
+                if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating))):
+                    raise ValueError("Observation value must be numeric or None")
+                restored_observations.append({
+                    "stay_id": decoded_stay,
+                    "charttime": charttime,
+                    "vital_sign": vital_sign,
+                    "value": value,
+                })
+            restored_windows[stay_id][window_id] = restored_observations
+
+        restored_locf = {}
+        for entry in payload["locf_state"]:
+            if not isinstance(entry, dict) or set(entry) != {"stay_id", "values"}:
+                raise ValueError("Invalid LOCF state entry")
+            stay_id, values = entry["stay_id"], entry["values"]
+            if isinstance(stay_id, bool) or not isinstance(stay_id, int) or not isinstance(values, dict):
+                raise ValueError("Invalid LOCF stay ID or values")
+            if stay_id in restored_locf:
+                raise ValueError("Duplicate stay entry in LOCF state")
+            decoded_values = {}
+            for name, encoded_value in values.items():
+                if not isinstance(name, str) or name not in TEMPORAL_FEATURE_NAMES:
+                    raise ValueError(f"Unknown LOCF feature name: {name!r}")
+                decoded_value = self._decode_state_value(encoded_value)
+                if decoded_value is not None and (
+                    isinstance(decoded_value, bool)
+                    or not isinstance(decoded_value, (int, float, np.integer, np.floating))
+                ):
+                    raise ValueError(f"LOCF value for {name} must be numeric or None")
+                decoded_values[name] = decoded_value
+            restored_locf[stay_id] = decoded_values
+
+        self.active_windows = restored_windows
+        self.locf_state = restored_locf
+
+    def clear_stay_state(self, stay_id):
+        """Remove preprocessor state for a discharged stay."""
+        key = int(stay_id)
+        self.active_windows.pop(key, None)
+        self.locf_state.pop(key, None)
+
     def get_window_id(self, charttime, intime):
         charttime = pd.Timestamp(charttime)
         intime = pd.Timestamp(intime)

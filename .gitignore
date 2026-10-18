@@ -28,7 +28,11 @@ metastore_db/
 derby.log
 
 Model/
-real_time/
+# Track the real-time pipeline at repository root.
+!real_time/
+real_time/__pycache__/
+real_time/*.pyc
+real_time/*.pre_live_timer_backup
 external_validation/
 models/
 utils/

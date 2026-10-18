@@ -1,7 +1,14 @@
 import importlib.util
+from pathlib import Path
+import sys
 import numpy as np
+TEST_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(TEST_DIR))
 import config as C
-spec = importlib.util.spec_from_file_location("patient_state", "04_patient_state.py")
+spec = importlib.util.spec_from_file_location(
+    "patient_state",
+    TEST_DIR / "04_patient_state.py",
+)
 patient_state = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patient_state)
 PatientStateManager = patient_state.PatientStateManager

@@ -1,5 +1,6 @@
 import logging
 import math
+from pyexpat import features
 import threading
 import time
 from collections import OrderedDict
@@ -486,6 +487,7 @@ class RealtimeInference:
         static
     ):
         self._require_started()
+        prediction_start = time.perf_counter()
         xgb_features = np.asarray(features, dtype=np.float32).reshape(-1)
         temporal = np.asarray(temporal, dtype=np.float32)
         missing_mask = np.asarray(missing_mask, dtype=np.float32)
@@ -543,7 +545,8 @@ class RealtimeInference:
             "threshold": threshold,
             "prediction": prediction,
             "sequence_length": int(sequence_length),
-            "model_version": getattr(C, "MODEL_VERSION", "frozen_ensemble")
+            "model_version": getattr(C, "MODEL_VERSION", "frozen_ensemble"),
+            "latency_ms": (time.perf_counter() - prediction_start) * 1000.0
         }
 def main():
     import artifact

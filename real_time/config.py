@@ -1,8 +1,6 @@
 import os
 import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-import torch
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BASE_DIR = "/home/mahith/BDA_PROJECT"
 MODEL_DIR = os.path.join(BASE_DIR, "Model")
 MIMIC_PATH = "/home/mahith/Datasets/mimic/physionet.org/files/mimiciv/3.1"
@@ -74,6 +72,31 @@ VITAL_ITEM_IDS = {
     223900: "GCS_Verbal",
     223901: "GCS_Motor"
 }
+REALTIME_VITAL_NAME_MAP = {
+    "heart_rate": "Heart Rate",
+    "sbp": "SBP",
+    "dbp": "DBP",
+    "map": "MAP",
+    "resp_rate": "Respiratory Rate",
+    "temperature": "Temperature",
+    "spo2": "SpO2",
+    "gcs_eye": "GCS Eye",
+    "gcs_verbal": "GCS Verbal",
+    "gcs_motor": "GCS Motor"
+}
+REALTIME_VITAL_VALIDATION_RANGES = {
+    "Heart Rate": (20.0, 250.0),
+    "SBP": (40.0, 300.0),
+    "DBP": (20.0, 200.0),
+    "MAP": (20.0, 250.0),
+    "Respiratory Rate": (4.0, 100.0),
+    "Temperature": (25.0, 45.0),
+    "SpO2": (50.0, 100.0),
+    "GCS Eye": (1.0, 4.0),
+    "GCS Verbal": (1.0, 5.0),
+    "GCS Motor": (1.0, 6.0)
+}
+REALTIME_VITAL_SIGNS = tuple(REALTIME_VITAL_NAME_MAP.values())
 TEMPORAL_FEATURE_NAMES = [
     "Heart_Rate_mean",
     "Heart_Rate_min",
@@ -130,8 +153,42 @@ TEMPORAL_FEATURE_NAMES = [
     "RR_trend",
     "GCS_Total_last"
 ]
+EXPECTED_REALTIME_VITALS = {
+    "Heart Rate",
+    "SBP",
+    "DBP",
+    "MAP",
+    "Respiratory Rate",
+    "Temperature",
+    "SpO2",
+    "GCS Eye",
+    "GCS Verbal",
+    "GCS Motor"
+}
+if set(REALTIME_VITAL_NAME_MAP.values()) != EXPECTED_REALTIME_VITALS:
+    raise RuntimeError("Realtime vital mapping does not match expected vital names")
+if set(REALTIME_VITAL_VALIDATION_RANGES) != EXPECTED_REALTIME_VITALS:
+    raise RuntimeError("Realtime vital ranges do not match expected vital names")
+for display_name in REALTIME_VITAL_SIGNS:
+    feature_name = display_name.replace(" ", "_")
+    if feature_name not in VITAL_ITEM_IDS.values():
+        raise RuntimeError(f"Realtime vital contract mismatch: {display_name}")
+for vital, (low, high) in REALTIME_VITAL_VALIDATION_RANGES.items():
+    if low >= high:
+        raise RuntimeError(f"Invalid realtime validation range: {vital}")
+EXPECTED_PRODUCER_VITALS = {
+    "heart_rate",
+    "sbp",
+    "dbp",
+    "resp_rate",
+    "spo2",
+    "temperature"
+}
+if not EXPECTED_PRODUCER_VITALS.issubset(REALTIME_VITAL_NAME_MAP):
+    raise RuntimeError("Producer vital contract does not match realtime vital mapping")
 STATIC_FEATURE_START = 54
 STATIC_FEATURE_END = 137
+REALTIME_TEMPERATURE_UNIT = "C"
 if len(TEMPORAL_FEATURE_NAMES) != TEMPORAL_FEATURES:
     raise RuntimeError("Temporal feature count does not match configuration")
 if TEMPORAL_FEATURES + STATIC_FEATURES != FEATURE_COUNT:
