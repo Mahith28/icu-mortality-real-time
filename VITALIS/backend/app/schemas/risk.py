@@ -28,3 +28,23 @@ class RiskEventResponse(BaseModel):
     shap_status: str | None
     top_features: list[dict[str, Any]] | None
     created_at: datetime
+
+
+class RiskExplanationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    stay_id: int
+    window_id: int
+    event_time: datetime | None
+    status: str | None
+    component: str | None
+    output: str | None
+    expected_value: float
+    model_margin: float
+    additivity_error: float | None
+    shap_values: list[float]
+    top_features: list[dict[str, Any]]
+    explanation_payload: dict[str, Any]
+    created_at: datetime

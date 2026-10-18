@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     realtime_lifecycle_topic: str = "icu_lifecycle"
     model_version: str = "vitalis-1.0"
     doctor_email_domain: str = "doctor.vitalis.com"
+    admin_email_domain: str = "admin.vitalis.com"
     nurse_email_domain: str = "nurse.vitalis.com"
     model_config = SettingsConfigDict(
         env_file=".env",

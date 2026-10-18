@@ -4,6 +4,9 @@ from pydantic import BaseModel, Field
 
 
 class PatientCreate(BaseModel):
+    branch_id: int = Field(gt=0)
+    admission_datetime: datetime
+
     patient_identifier: str = Field(
         min_length=2,
         max_length=50,
@@ -117,7 +120,9 @@ class DoctorOption(BaseModel):
     id: int
     name: str
     email: str
+    active_patient_count: int = 0
 
     model_config = {
         "from_attributes": True,
     }
+

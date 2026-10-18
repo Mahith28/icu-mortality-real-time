@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, select
@@ -10,6 +11,9 @@ from backend.app.core.dependencies import (
 )
 from backend.app.db.database import get_db
 from backend.app.models.assignment import PatientAssignment
+from backend.app.models.handover_alert import HandoverAlert
+from backend.app.models.staff_branch import StaffBranch
+from backend.app.models.branch import Branch
 from backend.app.models.patient import Patient, PatientStatus
 from backend.app.models.patient_stay import PatientStay
 from backend.app.models.user import User, UserRole
@@ -44,30 +48,48 @@ def get_patient_or_404(
     return patient
 
 
-def verify_doctor_access(
-    patient_id: int,
+def verify_patient_access(
+    patient: Patient,
     current_user: User,
     db: Session,
 ) -> None:
-    if current_user.role != UserRole.DOCTOR:
+    if current_user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Administrators cannot access patient records.")
+
+    if current_user.role == UserRole.NURSE:
+        if patient.branch_id is None:
+            raise HTTPException(status_code=403, detail="The patient's branch cannot be verified.")
+        branch = db.get(Branch, patient.branch_id)
+        membership = db.scalar(select(StaffBranch).where(
+            StaffBranch.staff_id == current_user.id,
+            StaffBranch.branch_id == patient.branch_id,
+        ))
+        if branch is None or not branch.is_active or membership is None:
+            raise HTTPException(status_code=403, detail="This patient is outside your authorized branch.")
         return
 
-    assignment = db.scalar(
-        select(PatientAssignment).where(
-            and_(
-                PatientAssignment.patient_id == patient_id,
-                PatientAssignment.doctor_id == current_user.id,
-                PatientAssignment.unassigned_at.is_(None),
-            )
-        )
-    )
+    if current_user.role == UserRole.DOCTOR:
+        if patient.status != PatientStatus.ACTIVE:
+            raise HTTPException(status_code=403, detail="Doctors can only access assigned active patients.")
 
-    if not assignment:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not assigned to this patient.",
-        )
+        assignment = db.scalar(select(PatientAssignment).where(and_(
+            PatientAssignment.patient_id == patient.id,
+            PatientAssignment.doctor_id == current_user.id,
+            PatientAssignment.unassigned_at.is_(None),
+        )))
+        if assignment is None:
+            raise HTTPException(status_code=403, detail="You are not assigned to this active patient.")
 
+        branch = db.get(Branch, patient.branch_id)
+        membership = db.scalar(select(StaffBranch).where(
+            StaffBranch.staff_id == current_user.id,
+            StaffBranch.branch_id == patient.branch_id,
+        ))
+        if branch is None or not branch.is_active or membership is None:
+            raise HTTPException(status_code=403, detail="This patient is outside your authorized branch.")
+        return
+
+    raise HTTPException(status_code=403, detail="Access denied.")
 
 @router.post(
     "",
@@ -79,25 +101,33 @@ def create_patient(
     current_user: User = Depends(require_nurse),
     db: Session = Depends(get_db),
 ):
-    existing = db.scalar(
-        select(Patient).where(
-            Patient.patient_identifier == data.patient_identifier.strip()
-        )
-    )
+    branch = db.get(Branch, data.branch_id)
+    if branch is None or not branch.is_active:
+        raise HTTPException(status_code=400, detail="Select an existing active branch.")
 
+    branch_membership = db.scalar(select(StaffBranch).where(
+        StaffBranch.staff_id == current_user.id,
+        StaffBranch.branch_id == data.branch_id,
+    ))
+    if branch_membership is None:
+        raise HTTPException(status_code=403, detail="You are not assigned to this branch.")
+
+    existing = db.scalar(select(Patient).where(
+        Patient.patient_identifier == data.patient_identifier.strip()
+    ))
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A patient with this identifier already exists.",
+        raise HTTPException(status_code=409, detail="A patient with this identifier already exists.")
+
+    entered_intime = data.admission_datetime
+    if entered_intime.tzinfo is None:
+        entered_intime = entered_intime.replace(
+            tzinfo=ZoneInfo("Asia/Kolkata")
         )
-
-    intime = datetime.now(timezone.utc).replace(tzinfo=None)
-
+    intime = entered_intime.astimezone(timezone.utc).replace(
+        tzinfo=None
+    )
     stay_id = generate_stay_id()
-
-    while db.scalar(
-        select(PatientStay).where(PatientStay.stay_id == stay_id)
-    ):
+    while db.scalar(select(PatientStay).where(PatientStay.stay_id == stay_id)):
         stay_id = generate_stay_id()
 
     patient = Patient(
@@ -108,28 +138,16 @@ def create_patient(
         race=data.race.strip() if data.race else None,
         insurance=data.insurance.strip() if data.insurance else None,
         admission_type=data.admission_type.strip(),
-        admission_location=(
-            data.admission_location.strip()
-            if data.admission_location
-            else None
-        ),
+        admission_location=data.admission_location.strip() if data.admission_location else None,
         icu_unit=data.icu_unit.strip(),
-        bed_number=(
-            data.bed_number.strip()
-            if data.bed_number
-            else None
-        ),
-        admission_diagnosis=(
-            data.admission_diagnosis.strip()
-            if data.admission_diagnosis
-            else None
-        ),
+        bed_number=data.bed_number.strip() if data.bed_number else None,
+        admission_diagnosis=data.admission_diagnosis.strip() if data.admission_diagnosis else None,
         height_cm=data.height_cm,
         weight_kg=data.weight_kg,
         status=PatientStatus.ACTIVE,
         created_by=current_user.id,
+        branch_id=data.branch_id,
     )
-
     db.add(patient)
     db.flush()
 
@@ -139,7 +157,6 @@ def create_patient(
         intime=intime,
         outtime=None,
     )
-
     db.add(stay)
     db.commit()
     db.refresh(patient)
@@ -158,15 +175,11 @@ def create_patient(
         )
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Patient was created, but the realtime ICU static "
-                f"record could not be published: {exc}"
-            ),
+            status_code=503,
+            detail=f"Patient was created, but the realtime ICU static record could not be published: {exc}",
         )
 
     return patient
-
 
 @router.get(
     "",
@@ -176,31 +189,69 @@ def list_patients(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if current_user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Administrators cannot access patient records.")
+
     if current_user.role == UserRole.NURSE:
+        branch_ids = select(StaffBranch.branch_id).where(
+            StaffBranch.staff_id == current_user.id
+        )
         patients = db.scalars(
             select(Patient)
+            .join(Branch, Branch.id == Patient.branch_id)
+            .where(
+                Patient.branch_id.in_(branch_ids),
+                Branch.is_active.is_(True),
+            )
             .order_by(Patient.created_at.desc())
-        ).all()
-
+        ).unique().all()
         return list(patients)
 
-    patients = db.scalars(
-        select(Patient)
-        .join(
-            PatientAssignment,
-            PatientAssignment.patient_id == Patient.id,
-        )
-        .where(
-            and_(
+    if current_user.role == UserRole.DOCTOR:
+        patients = db.scalars(
+            select(Patient)
+            .join(PatientAssignment, PatientAssignment.patient_id == Patient.id)
+            .join(Branch, Branch.id == Patient.branch_id)
+            .join(StaffBranch, and_(
+                StaffBranch.branch_id == Patient.branch_id,
+                StaffBranch.staff_id == current_user.id,
+            ))
+            .where(
                 PatientAssignment.doctor_id == current_user.id,
                 PatientAssignment.unassigned_at.is_(None),
                 Patient.status == PatientStatus.ACTIVE,
+                Branch.is_active.is_(True),
             )
-        )
-        .order_by(Patient.created_at.desc())
-    ).all()
+            .order_by(Patient.created_at.desc())
+        ).unique().all()
+        return list(patients)
 
-    return list(patients)
+    raise HTTPException(status_code=403, detail="Access denied.")
+
+@router.get("/branches")
+def list_nurse_branches(
+    current_user: User = Depends(require_nurse),
+    db: Session = Depends(get_db),
+):
+    branches = db.scalars(
+        select(Branch)
+        .join(StaffBranch, StaffBranch.branch_id == Branch.id)
+        .where(
+            StaffBranch.staff_id == current_user.id,
+            Branch.is_active.is_(True),
+        )
+        .order_by(Branch.name)
+    ).unique().all()
+
+    return [
+        {
+            "id": branch.id,
+            "code": branch.code,
+            "name": branch.name,
+            "location": branch.location,
+        }
+        for branch in branches
+    ]
 
 
 @router.get(
@@ -211,18 +262,62 @@ def list_doctors(
     current_user: User = Depends(require_nurse),
     db: Session = Depends(get_db),
 ):
-    doctors = db.scalars(
-        select(User)
+    from sqlalchemy import func
+
+    nurse_branch_ids = select(StaffBranch.branch_id).where(
+        StaffBranch.staff_id == current_user.id
+    )
+
+    active_patient_counts = (
+        select(
+            PatientAssignment.doctor_id.label("doctor_id"),
+            func.count(
+                func.distinct(PatientAssignment.patient_id)
+            ).label("active_patient_count"),
+        )
+        .join(Patient, Patient.id == PatientAssignment.patient_id)
+        .where(
+            Patient.status == PatientStatus.ACTIVE,
+            PatientAssignment.unassigned_at.is_(None),
+        )
+        .group_by(PatientAssignment.doctor_id)
+        .subquery()
+    )
+
+    rows = db.execute(
+        select(
+            User,
+            func.coalesce(
+                active_patient_counts.c.active_patient_count, 0
+            ).label("active_patient_count"),
+        )
+        .join(StaffBranch, StaffBranch.staff_id == User.id)
+        .join(Branch, Branch.id == StaffBranch.branch_id)
+        .outerjoin(
+            active_patient_counts,
+            active_patient_counts.c.doctor_id == User.id,
+        )
         .where(
             and_(
                 User.role == UserRole.DOCTOR,
                 User.is_active.is_(True),
+                Branch.is_active.is_(True),
+                StaffBranch.branch_id.in_(nurse_branch_ids),
             )
         )
+        .distinct()
         .order_by(User.name.asc())
     ).all()
 
-    return list(doctors)
+    return [
+        DoctorOption(
+            id=doctor.id,
+            name=doctor.name,
+            email=doctor.email,
+            active_patient_count=int(count or 0),
+        )
+        for doctor, count in rows
+    ]
 
 
 @router.get(
@@ -236,8 +331,8 @@ def get_patient(
 ):
     patient = get_patient_or_404(patient_id, db)
 
-    verify_doctor_access(
-        patient_id,
+    verify_patient_access(
+        patient,
         current_user,
         db,
     )
@@ -256,46 +351,54 @@ def assign_doctor(
     db: Session = Depends(get_db),
 ):
     patient = get_patient_or_404(patient_id, db)
+    verify_patient_access(patient, current_user, db)
 
     if patient.status != PatientStatus.ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Only active patients can be assigned to a doctor.",
-        )
+        raise HTTPException(status_code=409, detail="Only active patients can be assigned to a doctor.")
 
-    doctor = db.scalar(
-        select(User).where(
-            and_(
-                User.id == data.doctor_id,
-                User.role == UserRole.DOCTOR,
-                User.is_active.is_(True),
-            )
-        )
-    )
+    doctor = db.scalar(select(User).where(and_(
+        User.id == data.doctor_id,
+        User.role == UserRole.DOCTOR,
+        User.is_active.is_(True),
+    )))
+    if doctor is None:
+        raise HTTPException(status_code=404, detail="Active doctor not found.")
 
-    if not doctor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Active doctor not found.",
-        )
+    branch = db.get(Branch, patient.branch_id)
+    if branch is None or not branch.is_active:
+        raise HTTPException(status_code=409, detail="The patient's branch is inactive or missing.")
 
-    current_assignment = db.scalar(
-        select(PatientAssignment).where(
-            and_(
-                PatientAssignment.patient_id == patient_id,
-                PatientAssignment.unassigned_at.is_(None),
-            )
-        )
-    )
+    doctor_membership = db.scalar(select(StaffBranch).where(
+        StaffBranch.staff_id == doctor.id,
+        StaffBranch.branch_id == patient.branch_id,
+    ))
+    if doctor_membership is None:
+        raise HTTPException(status_code=400, detail="The doctor must be assigned to the patient's branch first.")
 
+    current_assignment = db.scalar(select(PatientAssignment).where(and_(
+        PatientAssignment.patient_id == patient_id,
+        PatientAssignment.unassigned_at.is_(None),
+    )))
     if current_assignment:
         if current_assignment.doctor_id == doctor.id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="This doctor is already assigned to the patient.",
-            )
+            raise HTTPException(status_code=409, detail="This doctor is already assigned to the patient.")
 
-        current_assignment.unassigned_at = datetime.utcnow()
+        # Resolve handover alerts for the previous assignment as part of
+        # the same transaction as the successful reassignment.
+        now = datetime.utcnow()
+        current_assignment.unassigned_at = now
+        db.query(HandoverAlert).filter(
+            HandoverAlert.assignment_id == current_assignment.id,
+            HandoverAlert.patient_id == patient.id,
+            HandoverAlert.status == "OPEN",
+        ).update(
+            {
+                HandoverAlert.status: "RESOLVED",
+                HandoverAlert.resolved_at: now,
+                HandoverAlert.resolved_by: current_user.id,
+            },
+            synchronize_session=False,
+        )
 
     assignment = PatientAssignment(
         patient_id=patient_id,
@@ -303,43 +406,10 @@ def assign_doctor(
         assigned_by=current_user.id,
         notes=data.notes,
     )
-
     db.add(assignment)
     db.commit()
     db.refresh(assignment)
-
     return assignment
-
-
-@router.get(
-    "/{patient_id}/assignments",
-    response_model=list[AssignmentResponse],
-)
-def get_assignments(
-    patient_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    get_patient_or_404(patient_id, db)
-
-    verify_doctor_access(
-        patient_id,
-        current_user,
-        db,
-    )
-
-    assignments = db.scalars(
-        select(PatientAssignment)
-        .where(
-            PatientAssignment.patient_id == patient_id
-        )
-        .order_by(
-            PatientAssignment.assigned_at.desc()
-        )
-    ).all()
-
-    return list(assignments)
-
 
 @router.post(
     "/{patient_id}/discharge",
@@ -351,6 +421,8 @@ def discharge_patient(
     db: Session = Depends(get_db),
 ):
     patient = get_patient_or_404(patient_id, db)
+
+    verify_patient_access(patient, current_user, db)
 
     if patient.status != PatientStatus.ACTIVE:
         raise HTTPException(

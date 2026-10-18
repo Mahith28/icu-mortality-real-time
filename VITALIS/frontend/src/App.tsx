@@ -6,11 +6,13 @@ import {
 
 import { useAuth } from "./auth/AuthContext";
 
-import Dashboard from "./pages/Dashboard";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Patients from "./pages/Patients";
-import PatientDetail from "./pages/PatientDetail";
+import { lazy, Suspense } from "react";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Login = lazy(() => import("./pages/Login"));
+const Patients = lazy(() => import("./pages/Patients"));
+const PatientDetail = lazy(() => import("./pages/PatientDetail"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 function LoadingScreen() {
   return (
@@ -28,24 +30,24 @@ function LoadingScreen() {
   );
 }
 
-function ProtectedRoute({
+function roleHome(role: string | undefined) {
+  return role === "ADMIN" ? "/admin" : "/dashboard";
+}
+
+function RoleRoute({
   children,
+  allowedRoles,
 }: {
   children: React.ReactNode;
+  allowedRoles: Array<"NURSE" | "DOCTOR" | "ADMIN">;
 }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
 
-  if (!user) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    );
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to={roleHome(user.role)} replace />;
   }
 
   return children;
@@ -74,9 +76,23 @@ function PublicRoute({
   return children;
 }
 
+function HomeRedirect() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <Navigate
+      to={user ? roleHome(user.role) : "/login"}
+      replace
+    />
+  );
+}
+
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
       <Route
         path="/login"
         element={
@@ -87,38 +103,41 @@ export default function App() {
       />
 
       <Route
-        path="/signup"
+        path="/dashboard"
         element={
-          <PublicRoute>
-            <Signup />
-          </PublicRoute>
+          <RoleRoute allowedRoles={["NURSE", "DOCTOR"]}>
+            <Dashboard />
+          </RoleRoute>
         }
       />
 
+
       <Route
-        path="/dashboard"
+        path="/admin"
         element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
+          <RoleRoute allowedRoles={["ADMIN"]}>
+            <Suspense fallback={<LoadingScreen />}>
+              <AdminDashboard />
+            </Suspense>
+          </RoleRoute>
         }
       />
 
       <Route
         path="/patients"
         element={
-          <ProtectedRoute>
+          <RoleRoute allowedRoles={["NURSE", "DOCTOR"]}>
             <Patients />
-          </ProtectedRoute>
+          </RoleRoute>
         }
       />
 
       <Route
         path="/patients/:id"
         element={
-          <ProtectedRoute>
+          <RoleRoute allowedRoles={["NURSE", "DOCTOR"]}>
             <PatientDetail />
-          </ProtectedRoute>
+          </RoleRoute>
         }
       />
 
@@ -126,7 +145,7 @@ export default function App() {
         path="/"
         element={
           <Navigate
-            to="/dashboard"
+            to="/login"
             replace
           />
         }
@@ -134,13 +153,9 @@ export default function App() {
 
       <Route
         path="*"
-        element={
-          <Navigate
-            to="/dashboard"
-            replace
-          />
-        }
+        element={<HomeRedirect />}
       />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

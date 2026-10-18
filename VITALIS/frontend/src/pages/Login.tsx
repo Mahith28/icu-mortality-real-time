@@ -14,7 +14,6 @@ import {
 } from "react";
 
 import {
-  Link,
   useNavigate,
 } from "react-router-dom";
 
@@ -48,13 +47,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(
+      const user = await login(
         email.trim(),
         password,
       );
 
       navigate(
-        "/dashboard",
+        user.role === "ADMIN" ? "/admin" : "/dashboard",
         { replace: true },
       );
     } catch (err) {
@@ -196,13 +195,6 @@ export default function Login() {
             </span>
           </div>
 
-          <div className="auth-footer">
-            Don't have an account?
-
-            <Link to="/signup">
-              Create account
-            </Link>
-          </div>
         </div>
 
         <div className="auth-note">

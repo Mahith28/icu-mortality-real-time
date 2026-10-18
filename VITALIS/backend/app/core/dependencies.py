@@ -20,18 +20,27 @@ def get_current_user(
             algorithms=[ALGORITHM],
         )
         user_id = payload.get("sub")
-        if not user_id:
+        if not isinstance(user_id, str) or not user_id.isdigit():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = int(user_id)
+        if user_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     user = db.scalar(
-        select(User).where(User.id == int(user_id))
+        select(User).where(User.id == user_id)
     )
     if not user:
         raise HTTPException(

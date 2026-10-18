@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from backend.app.core.dependencies import get_current_user, require_nurse
 from backend.app.db.database import get_db
-from backend.app.models.patient import Patient
+from backend.app.models.patient import Patient, PatientStatus
 from backend.app.models.patient_stay import PatientStay
 from backend.app.models.user import User
+from backend.app.api.patients import verify_patient_access
 from backend.app.schemas.stay import (
     PatientStayCreate,
     PatientStayResponse,
@@ -31,6 +32,26 @@ def create_stay(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found.",
         )
+    verify_patient_access(patient, current_user, db)
+
+    if patient.status != PatientStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot create an ICU stay for an inactive patient.",
+        )
+
+    active_stay = db.scalar(
+        select(PatientStay.id).where(
+            PatientStay.patient_id == patient_id,
+            PatientStay.outtime.is_(None),
+        ).limit(1)
+    )
+    if active_stay is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This patient already has an active ICU stay.",
+        )
+
     existing = db.scalar(
         select(PatientStay).where(
             PatientStay.stay_id == data.stay_id
@@ -66,6 +87,7 @@ def list_stays(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found.",
         )
+    verify_patient_access(patient, current_user, db)
     stays = db.scalars(
         select(PatientStay)
         .where(PatientStay.patient_id == patient_id)

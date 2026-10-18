@@ -5,7 +5,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: "NURSE" | "DOCTOR";
+  role: "NURSE" | "DOCTOR" | "ADMIN";
   is_active: boolean;
 }
 
@@ -30,10 +30,18 @@ export interface Patient {
   updated_at: string;
 }
 
+export interface BranchOption {
+  id: number;
+  code: string;
+  name: string;
+  location: string | null;
+}
+
 export interface DoctorOption {
   id: number;
   name: string;
   email: string;
+  active_patient_count: number;
 }
 
 export interface Assignment {
@@ -77,6 +85,24 @@ export interface RiskEvent {
   created_at: string;
 }
 
+export interface RiskExplanation {
+  id: number;
+  patient_id: number;
+  stay_id: number;
+  window_id: number;
+  event_time: string | null;
+  status: string | null;
+  component: string | null;
+  output: string | null;
+  expected_value: number;
+  model_margin: number;
+  additivity_error: number | null;
+  shap_values: number[];
+  top_features: ShapFeature[];
+  explanation_payload: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
@@ -84,9 +110,11 @@ export interface LoginResponse {
 }
 
 export interface CreatePatientPayload {
+  admission_datetime: string;
   patient_identifier: string;
   name: string;
   age: number;
+  branch_id: number;
   gender: string;
   race?: string | null;
   insurance?: string | null;
@@ -235,6 +263,11 @@ export async function createPatient(
   });
 }
 
+export async function getNurseBranches(): Promise<BranchOption[]> {
+  const result = await request<BranchOption[]>("/patients/branches");
+  return Array.isArray(result) ? result : [];
+}
+
 export async function getDoctors(): Promise<DoctorOption[]> {
   const result = await request<DoctorOption[]>(
     "/patients/doctors",
@@ -281,6 +314,55 @@ export async function dischargePatient(
   );
 }
 
+export interface HandoverAlert {
+  id: number;
+  alert_type: string;
+  status: string;
+  message: string;
+  patient_id: number;
+  patient_identifier: string;
+  branch_id: number;
+  doctor_id: number;
+  assignment_id: number;
+  created_at: string;
+}
+
+export async function getHandoverAlerts(): Promise<HandoverAlert[]> {
+  const result = await request<{ alerts: HandoverAlert[]; count: number }>(
+    "/handover/alerts",
+  );
+  return Array.isArray(result.alerts) ? result.alerts : [];
+}
+
+export async function resolveHandoverAlert(
+  alertId: number,
+): Promise<{ message: string; alert_id: number; status: string }> {
+  return request(`/handover/alerts/${alertId}/resolve`, {
+    method: "POST",
+  });
+}
+
+export interface DoctorAvailability {
+  doctor_id: number;
+  is_online: boolean;
+  updated_at: string;
+  new_alerts?: number;
+  message?: string;
+}
+
+export async function getDoctorAvailability(): Promise<DoctorAvailability> {
+  return request<DoctorAvailability>("/doctors/me/availability");
+}
+
+export async function setDoctorAvailability(
+  isOnline: boolean,
+): Promise<DoctorAvailability> {
+  return request<DoctorAvailability>(
+    `/doctors/me/availability?is_online=${isOnline}`,
+    { method: "POST" },
+  );
+}
+
 export async function getLatestRisk(
   patientId: number,
 ): Promise<RiskEvent> {
@@ -298,10 +380,19 @@ export async function getRiskHistory(
   );
 }
 
+export async function getRiskExplanationHistory(
+  patientId: number,
+  limit = 100,
+): Promise<RiskExplanation[]> {
+  return request<RiskExplanation[]>(
+    `/patients/${patientId}/risk/explanation/history?limit=${limit}`,
+  );
+}
+
 export async function getRiskExplanation(
   patientId: number,
-): Promise<RiskEvent> {
-  return request<RiskEvent>(
+): Promise<RiskExplanation> {
+  return request<RiskExplanation>(
     `/patients/${patientId}/risk/explanation`,
   );
 }
@@ -341,3 +432,111 @@ export function logout(): void {
 }
 
 export { API_BASE_URL };
+
+export interface AdminStaff {
+  id: number;
+  name: string;
+  email: string;
+  role: "NURSE" | "DOCTOR";
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AdminBranch {
+  id: number;
+  code: string;
+  name: string;
+  location: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export async function getAdminStaff(): Promise<AdminStaff[]> {
+  return request<AdminStaff[]>("/admin/staff");
+}
+
+export async function createAdminStaff(payload: {
+  name: string;
+  email: string;
+  password: string;
+  branch_ids?: number[];
+}): Promise<AdminStaff> {
+  return request<AdminStaff>("/admin/staff", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resetAdminStaffPassword(
+  staffId: number,
+  password: string,
+): Promise<{ message: string }> {
+  return request(`/admin/staff/${staffId}/password`, {
+    method: "PUT",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function deactivateAdminStaff(
+  staffId: number,
+): Promise<{ message: string }> {
+  return request(`/admin/staff/${staffId}/deactivate`, {
+    method: "PATCH",
+  });
+}
+
+export async function getAdminBranches(
+  includeInactive = true,
+): Promise<AdminBranch[]> {
+  return request<AdminBranch[]>(
+    `/admin/branches?include_inactive=${includeInactive}`,
+  );
+}
+
+export async function createAdminBranch(payload: {
+  code: string;
+  name: string;
+  location?: string | null;
+}): Promise<AdminBranch> {
+  return request<AdminBranch>("/admin/branches", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivateAdminBranch(
+  branchId: number,
+): Promise<{ message: string; branch_id: number }> {
+  return request(`/admin/branches/${branchId}/deactivate`, {
+    method: "PATCH",
+  });
+}
+
+export async function reactivateAdminBranch(
+  branchId: number,
+): Promise<{ message: string; branch_id: number }> {
+  return request(`/admin/branches/${branchId}/reactivate`, {
+    method: "PATCH",
+  });
+}
+
+export async function getAdminStaffBranches(
+  staffId: number,
+): Promise<Array<{
+  branch_id: number;
+  code: string;
+  name: string;
+  is_active: boolean;
+}>> {
+  return request(`/admin/staff/${staffId}/branches`);
+}
+
+export async function assignAdminStaffBranches(
+  staffId: number,
+  branchIds: number[],
+): Promise<{ message: string }> {
+  return request(`/admin/staff/${staffId}/branches`, {
+    method: "PUT",
+    body: JSON.stringify({ branch_ids: branchIds }),
+  });
+}

@@ -15,10 +15,13 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  LineChart,
+  Line,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
 } from "recharts";
 
 import {
@@ -37,12 +40,15 @@ import {
   getLatestRisk,
   getPatient,
   getRiskExplanation,
+  getRiskExplanationHistory,
   getRiskHistory,
   type Patient,
   type RiskEvent,
+  type RiskExplanation,
 } from "../api/client";
 
 import { useAuth } from "../auth/AuthContext";
+import { ThemeToggle, useTheme } from "../theme/ThemeContext";
 
 function percentage(
   value: number | null | undefined,
@@ -59,35 +65,34 @@ function percentage(
   ).toFixed(1)}%`;
 }
 
-function formatDate(
-  value: string | null,
-) {
-  if (!value) {
-    return "—";
-  }
+const IST_TIME_ZONE = "Asia/Kolkata";
 
-  return new Date(
-    value,
-  ).toLocaleString();
+// The backend stores producer timestamps as naive UTC datetimes.
+function parseRiskTimestamp(value: string): Date {
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return new Date(hasTimezone ? value : `${value}Z`);
 }
 
-function formatTime(
-  value: string | null,
-) {
-  if (!value) {
-    return "";
-  }
+function formatDate(value: string | null) {
+  if (!value) return "—";
 
-  return new Date(
-    value,
-  ).toLocaleTimeString(
-    [],
-    {
+  const date = parseRiskTimestamp(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return (
+    date.toLocaleString("en-IN", {
+      timeZone: IST_TIME_ZONE,
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    },
+      second: "2-digit",
+      hour12: true,
+    }) + " IST"
   );
 }
+
 
 export default function PatientDetail() {
   const {
@@ -96,6 +101,8 @@ export default function PatientDetail() {
 
   const navigate =
     useNavigate();
+
+  const { theme } = useTheme();
 
   const {
     user,
@@ -121,9 +128,14 @@ export default function PatientDetail() {
     );
 
   const [explanation, setExplanation] =
-    useState<RiskEvent | null>(
+    useState<RiskExplanation | null>(
       null,
     );
+
+  const [shapHistory, setShapHistory] =
+    useState<RiskExplanation[]>([]);
+
+  const [shapView, setShapView] = useState<"impact" | "waterfall" | "signed">("impact");
 
   const [loading, setLoading] =
     useState(true);
@@ -176,6 +188,7 @@ export default function PatientDetail() {
         risk,
         riskHistory,
         riskExplanation,
+        historicalExplanations,
       ] = await Promise.all([
         getLatestRisk(
           patientId,
@@ -195,6 +208,13 @@ export default function PatientDetail() {
         ).catch(
           () => null,
         ),
+
+        getRiskExplanationHistory(
+          patientId,
+          100,
+        ).catch(
+          () => [],
+        ),
       ]);
 
       setLatestRisk(
@@ -207,6 +227,10 @@ export default function PatientDetail() {
 
       setExplanation(
         riskExplanation,
+      );
+
+      setShapHistory(
+        historicalExplanations,
       );
     } catch (err) {
       setError(
@@ -242,11 +266,23 @@ export default function PatientDetail() {
         false,
       );
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Unable to discharge patient.",
-      );
+          : "Unable to discharge patient.";
+
+      if (
+        message.includes("Patient was discharged in the database") &&
+        message.includes("realtime discharge event")
+      ) {
+        setError(
+          `${message} The patient record is discharged; realtime delivery needs attention.`,
+        );
+        await loadPatient(true);
+        setShowDischargeModal(false);
+      } else {
+        setError(message);
+      }
     } finally {
       setDischarging(false);
     }
@@ -269,63 +305,209 @@ export default function PatientDetail() {
       );
   }, [patientId]);
 
-  const chartData =
-    useMemo(
-      () =>
-        [...history]
-          .reverse()
-          .map(
-            (event) => ({
-              time:
-                formatTime(
-                  event.event_time,
-                ),
+  const chartData = useMemo(
+    () =>
+      history
+        .filter(
+          (event) =>
+            event.event_time !== null &&
+            Number.isFinite(parseRiskTimestamp(event.event_time).getTime()),
+        )
+        .slice()
+        .sort(
+          (a, b) =>
+            parseRiskTimestamp(a.event_time!).getTime() - parseRiskTimestamp(b.event_time!).getTime(),
+        )
+        .map((event) => ({
+          timestamp: parseRiskTimestamp(event.event_time!).getTime(),
+          eventTime: event.event_time,
+          risk:
+            event.ensemble_probability !== null
+              ? Number((event.ensemble_probability * 100).toFixed(2))
+              : null,
+          threshold:
+            event.threshold !== null
+              ? Number((event.threshold * 100).toFixed(2))
+              : null,
+        })),
+    [history],
+  );
 
-              risk:
-                event.ensemble_probability !==
-                null
-                  ? Number(
-                      (
-                        event.ensemble_probability *
-                        100
-                      ).toFixed(
-                        2,
-                      ),
-                    )
-                  : null,
-
-              threshold:
-                event.threshold !==
-                null
-                  ? Number(
-                      (
-                        event.threshold *
-                        100
-                      ).toFixed(
-                        2,
-                      ),
-                    )
-                  : null,
-            }),
-          ),
-      [history],
+  // Only show SHAP when it belongs to the exact risk event on screen.
+  const explanationMatchesLatestRisk =
+    Boolean(
+      latestRisk &&
+      explanation &&
+      latestRisk.stay_id === explanation.stay_id &&
+      latestRisk.window_id === explanation.window_id
     );
 
   const shapFeatures =
-    explanation?.top_features ??
-    latestRisk?.top_features ??
-    [];
+    explanationMatchesLatestRisk && explanation?.status === "ok"
+      ? explanation.top_features ?? []
+      : [];
+
+  const shapTrend = useMemo(() => {
+    const validHistory = shapHistory
+      .filter(
+        (item) =>
+          item.status === "ok" &&
+          typeof item.event_time === "string" &&
+          Array.isArray((item as RiskExplanation & {
+            top_features?: import("../api/client").ShapFeature[];
+          }).top_features),
+      )
+      .slice()
+      .sort((a, b) => {
+        const timeA = parseRiskTimestamp(a.event_time!).getTime();
+        const timeB = parseRiskTimestamp(b.event_time!).getTime();
+        return timeA - timeB || a.id - b.id;
+      });
+
+    const importance = new Map<string, { total: number; count: number }>();
+
+    for (const item of validHistory) {
+      const features = (item as RiskExplanation & {
+        top_features?: import("../api/client").ShapFeature[];
+      }).top_features ?? [];
+
+      for (const feature of features) {
+        if (
+          !feature.feature ||
+          !Number.isFinite(feature.shap_value)
+        ) continue;
+
+        const current = importance.get(feature.feature) ?? {
+          total: 0,
+          count: 0,
+        };
+        current.total += Math.abs(feature.shap_value);
+        current.count += 1;
+        importance.set(feature.feature, current);
+      }
+    }
+
+    const selectedFeatures = [...importance.entries()]
+      .sort(
+        (a, b) =>
+          b[1].total / b[1].count - a[1].total / a[1].count,
+      )
+      .slice(0, 5)
+      .map(([feature]) => feature);
+
+    const rows = validHistory.map((item) => {
+      const features = (item as RiskExplanation & {
+        top_features?: import("../api/client").ShapFeature[];
+      }).top_features ?? [];
+
+      const row: Record<string, string | number | null> = {
+        time: item.event_time!,
+        window: item.window_id,
+      };
+
+      for (const name of selectedFeatures) {
+        const match = features.find((feature) => feature.feature === name);
+        row[name] =
+          match && Number.isFinite(match.shap_value)
+            ? match.shap_value
+            : null;
+      }
+
+      return row;
+    });
+
+    return { rows, selectedFeatures };
+  }, [shapHistory]);
 
   const maxShap =
     Math.max(
-      ...shapFeatures.map(
-        (feature) =>
-          Math.abs(
-            feature.shap_value,
-          ),
+      ...shapFeatures.map((feature) =>
+        Math.abs(feature.shap_value),
       ),
       0.000001,
     );
+
+  const waterfallSteps = (() => {
+    if (
+      !explanationMatchesLatestRisk ||
+      !explanation ||
+      explanation.status !== "ok" ||
+      !Array.isArray(explanation.shap_values) ||
+      explanation.shap_values.length === 0
+    ) {
+      return null;
+    }
+
+    const namedFeatures = [...(explanation.top_features ?? [])]
+      .filter((feature) => Number.isFinite(feature.shap_value))
+      .sort(
+        (a, b) =>
+          Math.abs(b.shap_value) - Math.abs(a.shap_value),
+      );
+
+    const namedTotal = namedFeatures.reduce(
+      (sum, feature) => sum + feature.shap_value,
+      0,
+    );
+    const fullTotal = explanation.shap_values.reduce(
+      (sum, value) => sum + value,
+      0,
+    );
+    if (
+      !Number.isFinite(explanation.expected_value) ||
+      !Number.isFinite(explanation.model_margin) ||
+      !explanation.shap_values.every(Number.isFinite)
+    ) {
+      return null;
+    }
+
+    const reconstructedMargin = explanation.expected_value + fullTotal;
+    const reconstructionError = explanation.model_margin - reconstructedMargin;
+    const reconstructionMatches = Math.abs(reconstructionError) <= 0.001;
+    const otherContribution = fullTotal - namedTotal;
+
+    const contributions = namedFeatures.map((feature) => ({
+      label: feature.feature,
+      value: feature.shap_value,
+    }));
+
+    if (Math.abs(otherContribution) > 1e-8) {
+      contributions.push({
+        label: "Other features",
+        value: otherContribution,
+      });
+    }
+
+    let cumulative = explanation.expected_value;
+    const steps = contributions.map((feature) => {
+      const start = cumulative;
+      cumulative += feature.value;
+      return {
+        ...feature,
+        start,
+        end: cumulative,
+      };
+    });
+
+    return {
+      baseline: explanation.expected_value,
+      finalValue: explanation.model_margin,
+      reconstructedMargin,
+      reconstructionError,
+      reconstructionMatches,
+      steps,
+      min: Math.min(
+        explanation.expected_value,
+        explanation.model_margin,
+        ...steps.map((step) => Math.min(step.start, step.end)),
+      ),
+      max: Math.max(
+        explanation.expected_value,
+        explanation.model_margin,
+        ...steps.map((step) => Math.max(step.start, step.end)),
+      ),
+    };
+  })();
 
   function handleLogout() {
     logout();
@@ -465,38 +647,26 @@ export default function PatientDetail() {
         <div className="detail-topbar">
           <button
             className="back-link"
-            onClick={() =>
-              navigate(
-                "/patients",
-              )
-            }
+            onClick={() => navigate("/patients")}
           >
             <ArrowLeft size={17} />
             Back to patients
           </button>
 
-          <button
-            className="refresh-button"
-            onClick={() =>
-              loadPatient(
-                true,
-              )
-            }
-            disabled={
-              refreshing
-            }
-          >
-            <RefreshCw
-              size={16}
-              className={
-                refreshing
-                  ? "spin"
-                  : ""
-              }
-            />
-
-            Refresh
-          </button>
+          <div className="detail-topbar-actions">
+            <ThemeToggle />
+            <button
+              className="refresh-button"
+              onClick={() => loadPatient(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                size={16}
+                className={refreshing ? "spin" : ""}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -664,21 +834,17 @@ export default function PatientDetail() {
               }}
             />
 
-            <span
-              className="threshold-marker"
-              style={{
-                left: `${Math.min(
-                  100,
-                  Math.max(
-                    0,
-                    (
-                      latestRisk?.threshold ??
-                      0.108
-                    ) * 100,
-                  ),
-                )}%`,
-              }}
-            />
+            {latestRisk?.threshold != null && (
+              <span
+                className="threshold-marker"
+                style={{
+                  left: `${Math.min(
+                    100,
+                    Math.max(0, latestRisk.threshold * 100),
+                  )}%`,
+                }}
+              />
+            )}
           </div>
 
           <div className="threshold-labels">
@@ -782,8 +948,9 @@ export default function PatientDetail() {
           />
         </section>
 
-        <section className="detail-two-column">
-          <div className="detail-panel">
+        <section className={`detail-two-column ${user?.role !== "DOCTOR" ? "detail-single-column" : ""}`}>
+          <div className="detail-left-stack">
+<div className="detail-panel risk-history-panel">
             <div className="panel-header">
               <div>
                 <span className="eyebrow">
@@ -807,7 +974,7 @@ export default function PatientDetail() {
               <div className="chart-wrapper">
                 <ResponsiveContainer
                   width="100%"
-                  height={310}
+                  height={260}
                 >
                   <AreaChart
                     data={
@@ -841,21 +1008,29 @@ export default function PatientDetail() {
                     </defs>
 
                     <CartesianGrid
-                      stroke="#202734"
-                      vertical={
-                        false
-                      }
+                      stroke={theme === "light" ? "#e2e8f0" : "#334155"}
+                      vertical={false}
                     />
 
                     <XAxis
-                      dataKey="time"
-                      stroke="#647083"
-                      tickLine={
-                        false
+                      dataKey="timestamp"
+                      type="number"
+                      scale="time"
+                      domain={["dataMin", "dataMax"]}
+                      tickFormatter={(value) =>
+                        new Date(Number(value)).toLocaleString("en-IN", {
+                          timeZone: IST_TIME_ZONE,
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                       }
-                      axisLine={
-                        false
-                      }
+                      minTickGap={65}
+                      stroke={theme === "light" ? "#64748b" : "#a3afbf"}
+                      tick={{ fill: theme === "light" ? "#475569" : "#cbd5e1", fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
                     />
 
                     <YAxis
@@ -878,25 +1053,27 @@ export default function PatientDetail() {
                     />
 
                     <Tooltip
+                      labelFormatter={(value) =>
+                        new Date(Number(value)).toLocaleString("en-IN", {
+                          timeZone: IST_TIME_ZONE,
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          hour12: true,
+                        }) + " IST"
+                      }
                       contentStyle={{
-                        background:
-                          "#111722",
-                        border:
-                          "1px solid rgba(148,163,184,.18)",
-                        borderRadius:
-                          10,
-                        color:
-                          "#edf2f8",
+                        background: theme === "light" ? "#ffffff" : "#111722",
+                        border: `1px solid ${theme === "light" ? "#cbd5e1" : "#475569"}`,
+                        borderRadius: 10,
+                        color: theme === "light" ? "#0f172a" : "#edf2f8",
                       }}
-                      formatter={(
-                        value,
-                      ) => [
-                        `${Number(
-                          value,
-                        ).toFixed(
-                          1,
-                        )}%`,
-                        "Risk",
+                      formatter={(value, name) => [
+                        value == null ? "—" : `${Number(value).toFixed(1)}%`,
+                        name === "threshold" ? "Threshold" : "Risk",
                       ]}
                     />
 
@@ -926,20 +1103,120 @@ export default function PatientDetail() {
               </div>
             )}
           </div>
+<div className="shap-history-section">
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">HISTORICAL EXPLAINABILITY</span>
+                  <h3>SHAP contributions over time</h3>
+                </div>
+                <span>{shapTrend.rows.length} windows</span>
+              </div>
 
-          <div className="detail-panel">
-            <div className="panel-header">
-              <div>
-                <span className="eyebrow">
-                  EXPLAINABILITY
+
+
+              {shapTrend.rows.length < 2 || shapTrend.selectedFeatures.length === 0 ? (
+                <div className="panel-empty">
+                  At least two historical SHAP explanations are needed to show trends.
+                </div>
+              ) : (
+                <div style={{ width: "100%", height: 320 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={shapTrend.rows}
+                      margin={{ top: 12, right: 18, left: 4, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color, #64748b)" opacity={0.25} />
+                      <XAxis
+                        dataKey="time"
+                        tickFormatter={(value: string) => {
+                          const date = parseRiskTimestamp(value);
+                          return Number.isNaN(date.getTime())
+                            ? ""
+                            : date.toLocaleString("en-IN", {
+                                timeZone: IST_TIME_ZONE,
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              });
+                        }}
+                        minTickGap={28}
+                      />
+                      <YAxis />
+                      <Tooltip
+                        labelFormatter={(value) => {
+                          const date = parseRiskTimestamp(String(value));
+                          return Number.isNaN(date.getTime())
+                            ? String(value)
+                            : `${formatDate(String(value))}`;
+                        }}
+                        formatter={(value, name) => [
+                          typeof value === "number" ? value.toFixed(4) : "Unavailable",
+                          String(name),
+                        ]}
+                      />
+                      <Legend />
+                      {shapTrend.selectedFeatures.map((feature, index) => (
+                        <Line
+                          key={feature}
+                          type="monotone"
+                          dataKey={feature}
+                          name={feature}
+                          connectNulls={false}
+                          dot={false}
+                          activeDot={{ r: 4 }}
+                          strokeWidth={2}
+                          stroke={
+                            ["#24c7b1", "#e6a23c", "#8b7cf6", "#e879a9", "#60a5fa"][index]
+                          }
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+</div>
+
+          {user?.role === "DOCTOR" && (
+            <div className="detail-panel">
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">
+                    EXPLAINABILITY
                 </span>
 
                 <h2>
-                  Top SHAP features
+                  {shapView === "impact" ? "Top SHAP features" : shapView === "waterfall" ? "SHAP contribution impact" : "Signed SHAP contributions"}
                 </h2>
               </div>
 
               <ShieldAlert size={18} />
+            </div>
+
+            <div className="shap-view-toggle" role="group" aria-label="SHAP plot type">
+              <button
+                type="button"
+                className={shapView === "impact" ? "active" : ""}
+                onClick={() => setShapView("impact")}
+              >
+                Feature impact
+              </button>
+              <button
+                type="button"
+                className={shapView === "waterfall" ? "active" : ""}
+                onClick={() => setShapView("waterfall")}
+              >
+                Contribution view
+              </button>
+              <button
+                type="button"
+                className={shapView === "signed" ? "active" : ""}
+                onClick={() => setShapView("signed")}
+              >
+                Signed contributions
+              </button>
             </div>
 
             {shapFeatures.length ===
@@ -949,81 +1226,202 @@ export default function PatientDetail() {
                 available.
               </div>
             ) : (
-              <div className="shap-list">
-                {shapFeatures.map(
-                  (
-                    feature,
-                    index,
-                  ) => {
-                    const positive =
-                      feature.shap_value >=
-                      0;
+              shapView === "signed" ? (
+                <div className="shap-contribution-chart">
+                  <div className="shap-contribution-guide">
+                    <div className="shap-contribution-legend">
+                      <span><i className="positive" /> Positive SHAP value</span>
+                      <span><i className="negative" /> Negative SHAP value</span>
+                    </div>
+                  </div>
+                  {(() => {
+                    const maxAbs = Math.max(
+                      ...shapFeatures.map((feature) => Math.abs(feature.shap_value)),
+                      0.000001,
+                    );
+                    return (
+                      <>
+                        <div className="shap-contribution-axis">
+                          <span>{(-maxAbs).toFixed(3)}</span>
+                          <span>0</span>
+                          <span>{maxAbs.toFixed(3)}</span>
+                        </div>
+                        {shapFeatures.map((feature, index) => {
+                          const positive = feature.shap_value >= 0;
+                          const width = (Math.abs(feature.shap_value) / maxAbs) * 50;
+                          const left = positive ? 50 : 50 - width;
+                          return (
+                            <div className="shap-contribution-row" key={`${feature.feature}-${index}`}>
+                              <div className="shap-contribution-label">
+                                {feature.feature}
+                                <small>
+                                  Value: {feature.value === null
+                                    ? "missing"
+                                    : typeof feature.value === "number"
+                                      ? Number.isInteger(feature.value)
+                                        ? feature.value
+                                        : feature.value.toFixed(2)
+                                      : feature.value}
+                                </small>
+                              </div>
+                              <div className="shap-contribution-track">
+                                <span className="shap-zero-line" />
+                                <span
+                                  className={`shap-contribution-bar ${positive ? "positive" : "negative"}`}
+                                  style={{ left: `${left}%`, width: `${width}%` }}
+                                />
+                              </div>
+                              <strong className={positive ? "shap-positive" : "shap-negative"}>
+                                {positive ? "+" : ""}{feature.shap_value.toFixed(3)}
+                              </strong>
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : shapView === "waterfall" ? (
+                !waterfallSteps || waterfallSteps.steps.length === 0 ? (
+                  <div className="panel-empty">
+                    Full SHAP waterfall data is not available yet.
+                  </div>
+                ) : (
+                  <div className="shap-waterfall">
+                    <div className="shap-waterfall-summary">
+                      <div>
+                        <span>Baseline</span>
+                        <strong>{waterfallSteps.baseline.toFixed(3)}</strong>
+                      </div>
+                      <div>
+                        <span>Final model margin</span>
+                        <strong>{waterfallSteps.finalValue.toFixed(3)}</strong>
+                      </div>
+                    </div>
 
-                    const width =
-                      (
-                        Math.abs(
-                          feature.shap_value,
-                        ) /
-                        maxShap
-                      ) *
-                      100;
+
+                    <p className="shap-waterfall-note">
+                      SHAP reconstruction:{" "}
+                      <strong>
+                        {waterfallSteps.reconstructionMatches
+                          ? "Consistent"
+                          : "Mismatch detected"}
+                      </strong>
+                      {" · "}Reconstructed margin{" "}
+                      {waterfallSteps.reconstructedMargin.toFixed(3)}
+                      {" · "}Difference{" "}
+                      {waterfallSteps.reconstructionError >= 0 ? "+" : ""}
+                      {waterfallSteps.reconstructionError.toFixed(4)}
+                      {" · "}Tolerance ±0.001
+                    </p>
+
+                    {(() => {
+                      const range = Math.max(
+                        waterfallSteps.max - waterfallSteps.min,
+                        0.000001,
+                      );
+                      const position = (value: number) =>
+                        ((value - waterfallSteps.min) / range) * 100;
+
+                      return (
+                        <div className="shap-waterfall-rows">
+                          <div className="shap-waterfall-axis">
+                            <span>{waterfallSteps.min.toFixed(2)}</span>
+                            <span>{((waterfallSteps.min + waterfallSteps.max) / 2).toFixed(2)}</span>
+                            <span>{waterfallSteps.max.toFixed(2)}</span>
+                          </div>
+
+                          {waterfallSteps.steps.map((step, index) => {
+                            const left = Math.min(
+                              position(step.start),
+                              position(step.end),
+                            );
+                            const width = Math.max(
+                              Math.abs(position(step.end) - position(step.start)),
+                              0.5,
+                            );
+                            const positive = step.value >= 0;
+
+                            return (
+                              <div
+                                className="shap-waterfall-row"
+                                key={`${step.label}-${index}`}
+                              >
+                                <div className="shap-waterfall-label" title={step.label}>
+                                  {step.label}
+                                </div>
+                                <div className="shap-waterfall-track">
+                                  <span
+                                    className={`shap-waterfall-bar ${positive ? "positive" : "negative"}`}
+                                    style={{
+                                      left: `${left}%`,
+                                      width: `${width}%`,
+                                    }}
+                                  />
+                                </div>
+                                <strong className={positive ? "shap-positive" : "shap-negative"}>
+                                  {positive ? "+" : ""}{step.value.toFixed(3)}
+                                </strong>
+                                <small>
+                                  {step.start.toFixed(3)} → {step.end.toFixed(3)}
+                                </small>
+                              </div>
+                            );
+                          })}
+
+                          <div className="shap-waterfall-final">
+                            <span>Model output</span>
+                            <strong>{waterfallSteps.finalValue.toFixed(3)}</strong>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )
+              ) : (
+                <div className="shap-list">
+                  {shapFeatures.map((feature, index) => {
+                    const positive = feature.shap_value >= 0;
+                    const width = (Math.abs(feature.shap_value) / maxShap) * 100;
 
                     return (
-                      <div
-                        className="shap-item"
-                        key={`${feature.feature}-${index}`}
-                      >
+                      <div className="shap-item" key={`${feature.feature}-${index}`}>
                         <div className="shap-header">
-                          <span>
-                            {
-                              feature.feature
-                            }
-                          </span>
-
-                          <strong
-                            className={
-                              positive
-                                ? "shap-positive"
-                                : "shap-negative"
-                            }
-                          >
-                            {positive
-                              ? "+"
-                              : ""}
-                            {feature.shap_value.toFixed(
-                              3,
-                            )}
+                          <span>{feature.feature}</span>
+                          <strong className={positive ? "shap-positive" : "shap-negative"}>
+                            {positive ? "+" : ""}{feature.shap_value.toFixed(3)}
                           </strong>
                         </div>
 
                         <div className="shap-track">
                           <span
-                            className={
-                              positive
-                                ? "shap-positive-bar"
-                                : "shap-negative-bar"
-                            }
-                            style={{
-                              width: `${width}%`,
-                            }}
+                            className={positive ? "shap-positive-bar" : "shap-negative-bar"}
+                            style={{ width: `${width}%` }}
                           />
                         </div>
 
                         <small>
-                          Value:{" "}
-                          {feature.value ===
-                          null
+                          Value: {feature.value === null
                             ? "missing"
-                            : feature.value}
+                            : typeof feature.value === "number"
+                              ? Number.isInteger(feature.value)
+                                ? feature.value
+                                : feature.value.toFixed(2)
+                              : feature.value}
                         </small>
                       </div>
                     );
-                  },
-                )}
-              </div>
+                  })}
+                </div>
+              )
             )}
-          </div>
+
+
+            </div>
+          )}
         </section>
+
+
 
         <section className="detail-panel history-panel">
           <div className="panel-header">
@@ -1170,7 +1568,8 @@ export default function PatientDetail() {
           </section>
         )}
 
-        <section className="technical-footer">
+        {user?.role === "DOCTOR" && (
+          <section className="technical-footer">
           <div>
             <span>
               Model version
@@ -1222,7 +1621,8 @@ export default function PatientDetail() {
               )}
             </strong>
           </div>
-        </section>
+          </section>
+        )}
         {showDischargeModal && (
           <div
             className="modal-backdrop"

@@ -28,15 +28,18 @@ import {
   dischargePatient,
   getAssignments,
   getDoctors,
+  getNurseBranches,
   getLatestRisk,
   getPatients,
   type Assignment,
   type DoctorOption,
+  type BranchOption,
   type Patient,
   type RiskEvent,
 } from "../api/client";
 
 import { useAuth } from "../auth/AuthContext";
+import { ThemeToggle } from "../theme/ThemeContext";
 
 function percentage(
   value: number | null | undefined,
@@ -69,6 +72,8 @@ type StatusFilter =
   | "DISCHARGED";
 
 interface PatientForm {
+  admission_datetime: string;
+  branch_id: string;
   patient_identifier: string;
   name: string;
   age: string;
@@ -85,6 +90,8 @@ interface PatientForm {
 }
 
 const emptyForm: PatientForm = {
+  admission_datetime: "",
+  branch_id: "",
   patient_identifier: "",
   name: "",
   age: "",
@@ -106,7 +113,7 @@ export default function Patients() {
   const { user, logout } = useAuth();
 
   const isNurse =
-    user?.role === "NURSE";
+    user?.role?.toUpperCase() === "NURSE";
 
   const [patients, setPatients] =
     useState<Patient[]>([]);
@@ -130,6 +137,9 @@ export default function Patients() {
   const [doctors, setDoctors] =
     useState<DoctorOption[]>([]);
 
+  const [branches, setBranches] =
+    useState<BranchOption[]>([]);
+
   const [search, setSearch] =
     useState("");
 
@@ -142,6 +152,9 @@ export default function Patients() {
   const [refreshing, setRefreshing] =
     useState(false);
 
+  const [dischargingPatientId, setDischargingPatientId] =
+    useState<number | null>(null);
+
   const [error, setError] =
     useState("");
 
@@ -149,6 +162,7 @@ export default function Patients() {
     useState<
       "create" |
       "assign" |
+      "admit" |
       null
     >(null);
 
@@ -283,9 +297,32 @@ export default function Patients() {
     }
   }
 
+  async function loadNurseBranches() {
+    if (!isNurse) {
+      return;
+    }
+
+    try {
+      const result = await getNurseBranches();
+      setBranches(result);
+
+      setForm((current) => ({
+        ...current,
+        branch_id: result.length === 1 ? String(result[0].id) : "",
+      }));
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load your authorized branches.",
+      );
+    }
+  }
+
   useEffect(() => {
     loadPatients();
     loadDoctors();
+    loadNurseBranches();
 
     const interval =
       window.setInterval(
@@ -414,96 +451,136 @@ export default function Patients() {
     setActionError("");
   }
 
+  function buildPatientPayload(branchId?: number) {
+    return {
+      admission_datetime: form.admission_datetime,
+      branch_id: branchId ?? Number(form.branch_id),
+      patient_identifier: form.patient_identifier.trim(),
+      name: form.name.trim(),
+      age: Number(form.age),
+      gender: form.gender.trim(),
+      race: form.race.trim() || null,
+      insurance: form.insurance.trim() || null,
+      admission_type: form.admission_type.trim() || null,
+      admission_location: form.admission_location.trim() || null,
+      icu_unit: form.icu_unit.trim() || null,
+      bed_number: form.bed_number.trim() || null,
+      admission_diagnosis: form.admission_diagnosis.trim() || null,
+      height_cm: form.height_cm ? Number(form.height_cm) : null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+    };
+  }
+
   async function handleCreatePatient(
     event: React.FormEvent,
   ) {
     event.preventDefault();
 
     if (!form.patient_identifier.trim()) {
-      setActionError(
-        "Patient identifier is required.",
-      );
+      setActionError("Patient identifier is required.");
       return;
     }
 
     if (!form.name.trim()) {
-      setActionError(
-        "Patient name is required.",
-      );
+      setActionError("Patient name is required.");
       return;
     }
 
-    if (!form.age) {
-      setActionError(
-        "Patient age is required.",
-      );
+    const age = Number(form.age);
+    if (
+      form.age.trim() === "" ||
+      !Number.isInteger(age) ||
+      age < 0 ||
+      age > 120
+    ) {
+      setActionError("Enter a whole-number age between 0 and 120.");
       return;
     }
 
     if (!form.gender) {
+      setActionError("Gender is required.");
+      return;
+    }
+
+    if (isNurse && branches.length !== 1) {
       setActionError(
-        "Gender is required.",
+        branches.length === 0
+          ? "You are not assigned to an active branch. Contact an administrator."
+          : "You are assigned to multiple branches. Ask an administrator to configure your primary branch.",
       );
+      return;
+    }
+
+    const authorizedBranchId =
+      isNurse && branches.length === 1
+        ? branches[0].id
+        : Number(form.branch_id);
+
+    if (
+      !authorizedBranchId ||
+      (isNurse && !branches.some((branch) => branch.id === authorizedBranchId))
+    ) {
+      setActionError("Unable to determine your authorized branch.");
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      branch_id: String(authorizedBranchId),
+    }));
+
+    if (!form.admission_datetime) {
+      setActionError("Admission date and time are required.");
+      return;
+    }
+
+    if (!form.admission_type.trim()) {
+      setActionError("Admission type is required.");
+      return;
+    }
+
+    if (!form.icu_unit.trim()) {
+      setActionError("ICU unit is required.");
       return;
     }
 
     try {
       setSaving(true);
       setActionError("");
-
-      const created =
-        await createPatient({
-          patient_identifier:
-            form.patient_identifier.trim(),
-          name: form.name.trim(),
-          age: Number(form.age),
-          gender: form.gender.trim(),
-          race:
-            form.race.trim() || null,
-          insurance:
-            form.insurance.trim() || null,
-          admission_type:
-            form.admission_type.trim() ||
-            null,
-          admission_location:
-            form.admission_location.trim() ||
-            null,
-          icu_unit:
-            form.icu_unit.trim() || null,
-          bed_number:
-            form.bed_number.trim() || null,
-          admission_diagnosis:
-            form.admission_diagnosis.trim() ||
-            null,
-          height_cm:
-            form.height_cm
-              ? Number(form.height_cm)
-              : null,
-          weight_kg:
-            form.weight_kg
-              ? Number(form.weight_kg)
-              : null,
-        });
-
-      setModal(null);
-      setForm(emptyForm);
-
-      await loadPatients();
-
-      setSelectedPatient(
-        created,
-      );
-
       setSelectedDoctor("");
       setAssignmentNotes("");
 
+      const created = await createPatient(
+        buildPatientPayload(authorizedBranchId),
+      );
+
+      setSelectedPatient(created);
       setModal("assign");
     } catch (err) {
-      setActionError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Unable to create patient.",
-      );
+          : "Unable to save patient details.";
+
+      const lowerMessage = message.toLowerCase();
+
+      if (
+        lowerMessage.includes("patient was created") &&
+        lowerMessage.includes("realtime icu static record")
+      ) {
+        setActionError(
+          `${message} Do not submit this admission again. ` +
+          "The patient may already exist in the database. Refresh the patient list and verify the record before retrying.",
+        );
+
+        try {
+          await loadPatients(true);
+        } catch {
+          // Keep the recovery guidance visible even if refreshing fails.
+        }
+      } else {
+        setActionError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -515,13 +592,12 @@ export default function Patients() {
     event.preventDefault();
 
     if (!selectedPatient) {
+      setActionError("Save the patient details before assigning a doctor.");
       return;
     }
 
     if (!selectedDoctor) {
-      setActionError(
-        "Please select a doctor.",
-      );
+      setActionError("Please select a doctor.");
       return;
     }
 
@@ -535,15 +611,18 @@ export default function Patients() {
         assignmentNotes,
       );
 
+      await loadDoctors();
+      await loadPatients(true);
       setModal(null);
       setSelectedPatient(null);
-
-      await loadPatients();
+      setSelectedDoctor("");
+      setAssignmentNotes("");
+      setActionError("");
     } catch (err) {
       setActionError(
         err instanceof Error
           ? err.message
-          : "Unable to assign doctor.",
+          : "Unable to assign doctor. You can retry without creating another patient.",
       );
     } finally {
       setSaving(false);
@@ -562,7 +641,12 @@ export default function Patients() {
       return;
     }
 
+    if (dischargingPatientId !== null) {
+      return;
+    }
+
     try {
+      setDischargingPatientId(patient.id);
       setRefreshing(true);
       setError("");
 
@@ -570,15 +654,34 @@ export default function Patients() {
         patient.id,
       );
 
-      await loadPatients(true);
+      await Promise.all([
+        loadPatients(true),
+        loadDoctors(),
+      ]);
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Unable to discharge patient.",
-      );
+          : "Unable to discharge patient.";
+
+      if (
+        message.toLowerCase().includes("discharged in the database") &&
+        message.toLowerCase().includes("realtime discharge event")
+      ) {
+        setError(
+          `${message} The patient may already be marked discharged. ` +
+          "The patient list will be refreshed; verify the status before retrying.",
+        );
+        await Promise.all([
+          loadPatients(true),
+          loadDoctors(),
+        ]);
+      } else {
+        setError(message);
+      }
     } finally {
       setRefreshing(false);
+      setDischargingPatientId(null);
     }
   }
 
@@ -637,11 +740,11 @@ export default function Patients() {
 
             <div>
               <strong>
-                System operational
+                Service status
               </strong>
 
               <span>
-                Realtime inference active
+                Inference health unverified
               </span>
             </div>
           </div>
@@ -674,6 +777,7 @@ export default function Patients() {
               alignItems: "center",
             }}
           >
+            <ThemeToggle />
             {isNurse && (
               <button
                 className="primary-action-button"
@@ -907,9 +1011,12 @@ export default function Patients() {
                     patient.id
                   ];
 
-                const elevated =
-                  risk?.prediction ===
-                  1;
+                const riskStatus =
+                  risk?.prediction === 1
+                    ? "elevated"
+                    : risk?.prediction === 0
+                      ? "normal"
+                      : "unavailable";
 
                 return (
                   <div
@@ -920,10 +1027,7 @@ export default function Patients() {
                   >
                     <button
                       type="button"
-                      style={{
-                        display:
-                          "contents",
-                      }}
+                      className="patient-row-main"
                       onClick={() =>
                         navigate(
                           `/patients/${patient.id}`,
@@ -1039,24 +1143,26 @@ export default function Patients() {
                       </div>
 
                       <div>
+                        <span className={`risk-badge ${riskStatus}`}>
+                          {riskStatus === "elevated"
+                            ? "ELEVATED RISK"
+                            : riskStatus === "normal"
+                              ? "NORMAL RISK"
+                              : "RISK UNAVAILABLE"}
+                        </span>
+                      </div>
+
+                      <div>
                         <span
-                          className={
-                            patient.status ===
-                            "DISCHARGED"
-                              ? "risk-badge normal"
-                              : elevated
-                                ? "risk-badge elevated"
-                                : "risk-badge normal"
-                          }
+                          className={`patient-status-badge ${
+                            patient.status === "DISCHARGED"
+                              ? "discharged"
+                              : "active"
+                          }`}
                         >
-                          {patient.status ===
-                          "DISCHARGED"
+                          {patient.status === "DISCHARGED"
                             ? "DISCHARGED"
-                            : risk
-                              ? elevated
-                                ? "ELEVATED"
-                                : "NORMAL"
-                              : "NO DATA"}
+                            : "ACTIVE"}
                         </span>
                       </div>
                     </button>
@@ -1077,6 +1183,7 @@ export default function Patients() {
                             <button
                               type="button"
                               title="Assign doctor"
+                              disabled={dischargingPatientId !== null}
                               onClick={() =>
                                 openAssignModal(
                                   patient,
@@ -1113,6 +1220,7 @@ export default function Patients() {
                             <button
                               type="button"
                               title="Discharge patient"
+                              disabled={dischargingPatientId !== null}
                               onClick={() =>
                                 handleDischarge(
                                   patient,
@@ -1140,10 +1248,17 @@ export default function Patients() {
                                   11,
                               }}
                             >
-                              <CheckCircle2
-                                size={13}
-                              />
-                              Discharge
+                              {dischargingPatientId === patient.id ? (
+                                <>
+                                  <RefreshCw size={13} className="spin" />
+                                  Discharging...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 size={13} />
+                                  Discharge
+                                </>
+                              )}
                             </button>
                           </>
                         )}
@@ -1152,6 +1267,7 @@ export default function Patients() {
 
                     <button
                       type="button"
+                      className="patient-row-chevron"
                       aria-label={`Open ${patient.name}`}
                       onClick={() =>
                         navigate(
@@ -1249,7 +1365,7 @@ export default function Patients() {
                 Identity
               </div>
 
-              <div className="form-grid">
+                      <div className="form-grid">
                 <label>
                   Patient ID *
                   <input
@@ -1394,6 +1510,22 @@ export default function Patients() {
               </div>
 
               <div className="form-grid">
+                <label className="form-span-2">
+                  Admission date and time *
+                  <input
+                    type="datetime-local"
+                    value={form.admission_datetime}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        admission_datetime: event.target.value,
+                      })
+                    }
+                    required
+                    disabled={saving}
+                  />
+                  <small>Enter the hospital-local admission time.</small>
+                </label>
                 <label>
                   Admission type
                   <select
@@ -1447,11 +1579,12 @@ export default function Patients() {
                 </label>
 
                 <label>
-                  ICU unit
+                  ICU unit *
                   <input
                     value={
                       form.icu_unit
                     }
+                    required
                     onChange={(
                       event,
                     ) =>
@@ -1517,7 +1650,9 @@ export default function Patients() {
                   Height (cm)
                   <input
                     type="number"
-                    min="0"
+                    min="0.01"
+                    max="300"
+                    step="any"
                     value={
                       form.height_cm
                     }
@@ -1538,7 +1673,9 @@ export default function Patients() {
                   Weight (kg)
                   <input
                     type="number"
-                    min="0"
+                    min="0.01"
+                    max="500"
+                    step="any"
                     value={
                       form.weight_kg
                     }
@@ -1583,10 +1720,10 @@ export default function Patients() {
                     </>
                   ) : (
                     <>
-                      <ClipboardPlus
+                      <Stethoscope
                         size={15}
                       />
-                      Create patient
+                      Done
                     </>
                   )}
                 </button>
@@ -1619,7 +1756,7 @@ export default function Patients() {
                   </span>
 
                   <h2>
-                    Assign doctor
+                    Assign Doctor
                   </h2>
 
                   <p>
@@ -1689,11 +1826,8 @@ export default function Patients() {
                             doctor.id
                           }
                         >
-                          {doctor.name}{" "}
-                          —{" "}
-                          {
-                            doctor.email
-                          }
+                          {doctor.name} — {doctor.active_patient_count} active patient
+                          {doctor.active_patient_count !== 1 ? "s" : ""}
                         </option>
                       ),
                     )}
@@ -1764,10 +1898,10 @@ export default function Patients() {
                       </>
                     ) : (
                       <>
-                        <Stethoscope
+                        <ClipboardPlus
                           size={15}
                         />
-                        Assign doctor
+                        Assign Doctor
                       </>
                     )}
                   </button>
@@ -1776,6 +1910,7 @@ export default function Patients() {
             </div>
           </div>
         )}
+
     </div>
   );
 }
